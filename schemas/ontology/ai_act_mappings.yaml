@@ -1,0 +1,176 @@
+# The Ambyte Knowledge Graph Definition for the EU AI Act
+# Source: Regulation (EU) 2024/1689 (Artificial Intelligence Act)
+
+regulation_id: "EU-AI-ACT-2024/1689"
+title: "Artificial Intelligence Act"
+effective_date: "2026-08-02" # General application date (with exceptions for prohibitions)
+jurisdiction: "EU"
+
+mappings:
+  # ============================================================================
+  # PROHIBITED AI PRACTICES (Article 5)
+  # These map to RISK_SEVERITY_UNACCEPTABLE and BLOCKING enforcement.
+  # ============================================================================
+
+  - source_reference: "Art. 5(1)(a)"
+    title: "Manipulative or Deceptive Techniques"
+    description: "AI systems using subliminal techniques or purposefully manipulative techniques to distort behaviour and cause significant harm."
+    classification:
+      type: "PURPOSE_RESTRICTION"
+      severity: "BLOCKING"
+    technical_enforcement:
+      risk_level: "RISK_SEVERITY_UNACCEPTABLE"
+      action: "block_deployment"
+      tags: ["manipulative", "subliminal"]
+
+  - source_reference: "Art. 5(1)(c)"
+    title: "Social Scoring"
+    description: "Evaluation or classification of natural persons based on social behaviour leading to detrimental or unfavourable treatment in unrelated contexts."
+    classification:
+      type: "PURPOSE_RESTRICTION"
+      severity: "BLOCKING"
+    technical_enforcement:
+      risk_level: "RISK_SEVERITY_UNACCEPTABLE"
+      denied_purposes: ["SOCIAL_SCORING", "CITIZEN_SCORING"]
+
+  - source_reference: "Art. 5(1)(f)"
+    title: "Emotion Recognition in Workplace/Education"
+    description: "Inferring emotions of a natural person in the areas of workplace and education institutions (except for medical/safety reasons)."
+    classification:
+      type: "PURPOSE_RESTRICTION"
+      severity: "BLOCKING"
+    technical_enforcement:
+      risk_level: "RISK_SEVERITY_UNACCEPTABLE"
+      context_check: 
+        domain: ["WORKPLACE", "EDUCATION"]
+        task: "EMOTION_RECOGNITION"
+      allow_exception_if: "MEDICAL_OR_SAFETY_PURPOSE"
+
+  - source_reference: "Art. 5(1)(g)"
+    title: "Biometric Categorization"
+    description: "Categorization of natural persons based on biometric data to deduce race, political opinions, religion, or sexual orientation."
+    classification:
+      type: "PRIVACY_ENHANCEMENT"
+      severity: "BLOCKING"
+    technical_enforcement:
+      risk_level: "RISK_SEVERITY_UNACCEPTABLE"
+      denied_data_categories: ["BIOMETRIC_INFERENCE_SENSITIVE"]
+
+  - source_reference: "Art. 5(1)(h)"
+    title: "Real-time Remote Biometric Identification"
+    description: "Use in publicly accessible spaces for law enforcement (subject to strict exceptions like terrorism/missing persons)."
+    classification:
+      type: "GEOFENCING" # Used here as a proxy for spatial restriction (public spaces)
+      severity: "BLOCKING"
+    technical_enforcement:
+      risk_level: "RISK_SEVERITY_UNACCEPTABLE"
+      requires_human_authorization: true
+      exception_flow: "JUDICIAL_AUTHORIZATION_REQUIRED"
+
+  # ============================================================================
+  # HIGH-RISK AI SYSTEMS (Article 6 & Annex III)
+  # These map to RISK_SEVERITY_HIGH and specific compliance obligations.
+  # ============================================================================
+
+  - source_reference: "Art. 6(2) / Annex III"
+    title: "High-Risk Classification"
+    description: "Systems used in critical infrastructure, education, employment, essential services, law enforcement, migration, or democratic processes."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "NOTIFY_HUMAN" # Requires conformity assessment, not necessarily blocking
+    technical_enforcement:
+      risk_level: "RISK_SEVERITY_HIGH"
+      action: "flag_for_conformity_assessment"
+      required_documentation: ["technical_file", "risk_management_system"]
+
+  - source_reference: "Art. 10"
+    title: "Data Governance & Management"
+    description: "Training, validation and testing data sets must be relevant, representative, free of errors and complete."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "BLOCKING" # Cannot train if data governance fails
+    technical_enforcement:
+      phase: "TRAINING"
+      check: "dataset_quality_validation"
+      requires_bias_mitigation: true
+      lineage_check: "ensure_training_data_provenance"
+
+  - source_reference: "Art. 12"
+    title: "Record-Keeping (Logging)"
+    description: "High-risk AI systems shall technically allow for the automatic recording of events (logs) over the lifetime of the system."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "BLOCKING" # Deployment blocked if logging is disabled
+    technical_enforcement:
+      feature_requirement: "automatic_logging_enabled"
+      log_retention_period: "6m" # Minimum 6 months per Art 19
+
+  - source_reference: "Art. 14"
+    title: "Human Oversight"
+    description: "Designed so they can be effectively overseen by natural persons (human-in-the-loop)."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "NOTIFY_HUMAN"
+    technical_enforcement:
+      feature_requirement: "human_interface_tools"
+      operational_constraint: "allow_human_override"
+
+  # ============================================================================
+  # TRANSPARENCY & DEEPFAKES (Article 50)
+  # ============================================================================
+
+  - source_reference: "Art. 50(2)"
+    title: "Synthetic Content Labeling"
+    description: "Outputs of AI systems generating synthetic audio, image, video or text must be marked in a machine-readable format."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "BLOCKING"
+    technical_enforcement:
+      action: "inject_watermark"
+      metadata_requirement: "ai_generated=true"
+
+  - source_reference: "Art. 50(4)"
+    title: "Deep Fake Disclosure"
+    description: "Deployers of deep fakes must disclose that the content has been artificially generated or manipulated."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "AUDIT_ONLY"
+    technical_enforcement:
+      action: "verify_disclosure_mechanism"
+
+  # ============================================================================
+  # GENERAL PURPOSE AI MODELS (GPAI) (Articles 51-53)
+  # ============================================================================
+
+  - source_reference: "Art. 51(1)(a) / Art. 51(2)"
+    title: "GPAI with Systemic Risk (Compute Threshold)"
+    description: "GPAI models trained with cumulative computation > 10^25 FLOPs are presumed to carry systemic risk."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "NOTIFY_HUMAN"
+    technical_enforcement:
+      check_parameter: "training_compute_flops"
+      threshold_value: 1.0e+25
+      action: "classify_systemic_risk"
+      reporting_requirement: "notify_ai_office_2_weeks"
+
+  - source_reference: "Art. 53(1)(c)"
+    title: "Copyright Policy for GPAI"
+    description: "Put in place a policy to comply with Union copyright law and identify/comply with reservation of rights (text and data mining opt-outs)."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "BLOCKING"
+    technical_enforcement:
+      phase: "TRAINING"
+      check: "dataset_copyright_clearance"
+      action: "exclude_opt_out_data" # Respects TDM reservations (Art 4(3) Directive 2019/790)
+
+  - source_reference: "Art. 53(1)(d)"
+    title: "GPAI Training Data Summary"
+    description: "Draw up and make publicly available a sufficiently detailed summary about the content used for training."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "AUDIT_ONLY"
+    technical_enforcement:
+      action: "generate_data_card"
+      required_fields: ["data_sources", "provenance"]

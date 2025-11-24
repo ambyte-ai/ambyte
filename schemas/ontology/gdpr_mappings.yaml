@@ -1,0 +1,161 @@
+# The Ambyte Knowledge Graph Definition for GDPR
+# Source: Regulation (EU) 2016/679 (General Data Protection Regulation)
+
+regulation_id: "EU-GDPR-2016/679"
+title: "General Data Protection Regulation"
+effective_date: "2018-05-25"
+jurisdiction: "EU" # Applies to EEA
+
+mappings:
+  # ============================================================================
+  # PRINCIPLES (Article 5)
+  # ============================================================================
+  
+  - source_reference: "Art. 5(1)(b)"
+    title: "Purpose Limitation"
+    description: "Personal data must be collected for specified, explicit and legitimate purposes and not further processed in a manner that is incompatible with those purposes."
+    classification:
+      type: "PURPOSE_RESTRICTION"
+      severity: "BLOCKING"
+    technical_enforcement:
+      action: "block_incompatible_processing"
+      requires_lineage_check: true # Must check if downstream use matches upstream purpose
+
+  - source_reference: "Art. 5(1)(c)"
+    title: "Data Minimisation"
+    description: "Adequate, relevant and limited to what is necessary in relation to the purposes for which they are processed."
+    classification:
+      type: "PRIVACY_ENHANCEMENT"
+      severity: "AUDIT_ONLY"
+    technical_enforcement:
+      method: "ROW_LEVEL_SECURITY" # Filter rows not relevant to the query context
+
+  - source_reference: "Art. 5(1)(e)"
+    title: "Storage Limitation"
+    description: "Kept in a form which permits identification of data subjects for no longer than is necessary."
+    classification:
+      type: "RETENTION"
+      severity: "BLOCKING"
+    technical_enforcement:
+      trigger: "EVENT_DATE" # End of Purpose
+      action: "delete"
+
+  - source_reference: "Art. 5(1)(f)"
+    title: "Integrity and Confidentiality"
+    description: "Processed in a manner that ensures appropriate security of the personal data."
+    classification:
+      type: "PRIVACY_ENHANCEMENT"
+      severity: "BLOCKING"
+    technical_enforcement:
+      method: "PSEUDONYMIZATION" # Default to masking PII columns
+
+  # ============================================================================
+  # SPECIAL CATEGORIES (Article 9)
+  # ============================================================================
+
+  - source_reference: "Art. 9(1)"
+    title: "Processing of Special Categories of Personal Data"
+    description: "Processing of personal data revealing racial or ethnic origin, political opinions, religious or philosophical beliefs, or trade union membership, and the processing of genetic data, biometric data... shall be prohibited."
+    classification:
+      type: "PURPOSE_RESTRICTION"
+      severity: "BLOCKING"
+    technical_enforcement:
+      # High Sensitivity tag triggers automatic blocking unless specific consent exists
+      required_tag: "SENSITIVITY_LEVEL_RESTRICTED" 
+      requires_explicit_consent: true
+
+  # ============================================================================
+  # RIGHTS OF THE DATA SUBJECT (Articles 17, 21, 22)
+  # ============================================================================
+
+  - source_reference: "Art. 17"
+    title: "Right to Erasure ('Right to be Forgotten')"
+    description: "The data subject shall have the right to obtain from the controller the erasure of personal data concerning him or her without undue delay."
+    classification:
+      type: "RETENTION"
+      severity: "BLOCKING"
+    technical_enforcement:
+      trigger: "DATA_SUBJECT_REQUEST"
+      action: "delete_row_by_id"
+      sla_duration: "30d" # Article 12(3) sets 1 month deadline
+
+  - source_reference: "Art. 21(2)"
+    title: "Right to Object to Direct Marketing"
+    description: "Where personal data are processed for direct marketing purposes, the data subject shall have the right to object at any time... the personal data shall no longer be processed for such purposes."
+    classification:
+      type: "PURPOSE_RESTRICTION"
+      severity: "BLOCKING"
+    technical_enforcement:
+      denied_purposes: ["MARKETING", "ADVERTISING", "OUTREACH"]
+
+  - source_reference: "Art. 22(1)"
+    title: "Automated Individual Decision-making"
+    description: "The data subject shall have the right not to be subject to a decision based solely on automated processing, including profiling, which produces legal effects."
+    classification:
+      type: "AI_MODEL_CONSTRAINT"
+      severity: "NOTIFY_HUMAN"
+    technical_enforcement:
+      require_human_loop: true
+      block_automated_decisions: true
+
+  # ============================================================================
+  # TRANSFERS (Chapter V - Articles 44-45)
+  # ============================================================================
+
+  - source_reference: "Art. 44"
+    title: "General Principle for Transfers"
+    description: "Any transfer of personal data ... to a third country ... shall take place only if ... conditions laid down in this Chapter are complied with."
+    classification:
+      type: "GEOFENCING"
+      severity: "BLOCKING"
+    technical_enforcement:
+      strict_residency: true
+      allowed_regions: 
+        # EU 27
+        - "AT" # Austria
+        - "BE" # Belgium
+        - "BG" # Bulgaria
+        - "HR" # Croatia
+        - "CY" # Cyprus
+        - "CZ" # Czech Republic
+        - "DK" # Denmark
+        - "EE" # Estonia
+        - "FI" # Finland
+        - "FR" # France
+        - "DE" # Germany
+        - "GR" # Greece
+        - "HU" # Hungary
+        - "IE" # Ireland
+        - "IT" # Italy
+        - "LV" # Latvia
+        - "LT" # Lithuania
+        - "LU" # Luxembourg
+        - "MT" # Malta
+        - "NL" # Netherlands
+        - "PL" # Poland
+        - "PT" # Portugal
+        - "RO" # Romania
+        - "SK" # Slovakia
+        - "SI" # Slovenia
+        - "ES" # Spain
+        - "SE" # Sweden
+        # EEA
+        - "IS" # Iceland
+        - "LI" # Liechtenstein
+        - "NO" # Norway
+        # Adequacy Decisions
+        - "GB" # United Kingdom
+        - "CH" # Switzerland
+        - "JP" # Japan
+        - "CA" # Canada (Commercial)
+        - "IL" # Israel
+        - "KR" # South Korea
+        - "NZ" # New Zealand
+        - "AR" # Argentina
+        - "UY" # Uruguay
+        - "AD" # Andorra
+        - "FO" # Faroe Islands
+        - "GG" # Guernsey
+        - "JE" # Jersey
+        - "IM" # Isle of Man
+        # Note: US is complex (Data Privacy Framework), handled via specific checks usually.
