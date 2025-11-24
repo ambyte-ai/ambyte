@@ -9,10 +9,10 @@ managed:
 plugins:
   # Generates the Python runtime code (_pb2.py)
   - remote: buf.build/protocolbuffers/python
-    out: ../ambyte_schemas
+    out: ../ambyte_schemas/proto
   # Generates Python Type Hints (_pb2.pyi) - Critical for IDE autocompletion
   - remote: buf.build/protocolbuffers/pyi
-    out: ../ambyte_schemas
+    out: ../ambyte_schemas/proto
   # (Optional) Generates Go code if we need it for the K8s controller later
   # - remote: buf.build/protocolbuffers/go
   #   out: ../../gen/go

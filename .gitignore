@@ -59,8 +59,7 @@ cover/
 *.pb.go
 
 # Ignore the specific directory structure created by Buf inside the python package
-schemas/ambyte_schemas/
-
+schemas/ambyte_schemas/proto
 # Translations
 *.mo
 *.pot
