@@ -1,0 +1,21 @@
+[project]
+name = "ambyte-cli"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "ambyte-sdk",
+    "ambyte-compiler",
+    "typer>=0.20.0",
+    "rich>=14.2.0"
+]
+
+[project.scripts]
+covenant = "ambyte_cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+ambyte-sdk = { workspace = true }
+ambyte-compiler = { workspace = true }

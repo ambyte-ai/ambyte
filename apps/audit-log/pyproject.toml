@@ -1,0 +1,17 @@
+[project]
+name = "ambyte-audit"
+version = "0.1.0"
+description = "Immutable audit logging and cryptographic proof generation"
+requires-python = ">=3.11"
+dependencies = [
+    "ambyte-schemas",
+    "cryptography>=46.0.3",  # For signing logs
+    "pydantic>=2.12.4",
+    "sqlalchemy[asyncio]>=2.0.44", 
+]
+
+[tool.uv]
+package = false # It's a service, not a library
+
+[tool.uv.sources]
+ambyte-schemas = { workspace = true }

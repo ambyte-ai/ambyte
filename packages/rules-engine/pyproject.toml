@@ -1,0 +1,16 @@
+[project]
+name = "ambyte-rules"
+version = "0.1.0"
+description = "Logic for policy conflict resolution and enforcement"
+requires-python = ">=3.11"
+dependencies = [
+    "ambyte-schemas",
+    "networkx>=3.5" # Useful for dependency/lineage graphs
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+ambyte-schemas = { workspace = true }

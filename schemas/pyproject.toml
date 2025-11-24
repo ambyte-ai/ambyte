@@ -1,0 +1,13 @@
+[project]
+name = "ambyte-schemas"
+version = "0.1.0"
+description = "Canonical ontology and data contracts for Ambyte"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.12.4",
+    "protobuf>=6.33.1"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

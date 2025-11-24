@@ -1,0 +1,17 @@
+[project]
+name = "ambyte-compiler"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "ambyte-schemas",
+    "ambyte-rules",
+    "jinja2>=3.1.6",
+    "pyyaml>=6.0.3"
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+ambyte-schemas = { workspace = true }
+ambyte-rules = { workspace = true }

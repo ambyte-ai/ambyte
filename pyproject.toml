@@ -1,0 +1,124 @@
+[project]
+name = "ambyte-platform"
+version = "0.1.0"
+description = "Turn legal and contractual obligations into machine-enforceable policies that govern data and AI pipelines"
+authors = [
+    { name = "Enzo Biondo", email = "enzobiondo11@outlook.com" },
+]
+readme = "README.md"
+urls = { Repository = "https://github.com/ambyte-ai/ambyte-platform" }
+keywords = ["compliance", "data-protection", "policy-as-code", "data governance", "security", "ai"]
+requires-python = ">=3.11,<3.14"
+
+dependencies = [
+    "ambyte-sdk",
+    "ambyte-schemas",
+    "ambyte-connectors",
+    "ambyte-control-plane",
+    "ambyte-ingest",
+    "ambyte-compiler",
+]
+
+[tool.uv.workspace]
+# Define the directories that contain your apps and packages.
+members = [
+    "apps/*",
+    "packages/python-sdk",
+    "packages/rules-engine",
+    # CONNECTORS - Do NOT use wildcard here because of Go code
+    "connectors/airflow-operator",
+    "connectors/python-common",
+    "schemas"
+]
+
+[tool.uv.sources]
+# Link the dependencies listed in [project.dependencies] to the workspace members.
+ambyte-sdk = { workspace = true }
+ambyte-schemas = { workspace = true }
+ambyte-connectors = { workspace = true }
+ambyte-control-plane = { workspace = true }
+ambyte-ingest = { workspace = true }
+ambyte-compiler = { workspace = true }
+
+[tool.ruff]
+line-length = 120
+fix = true
+
+target-version = "py311"
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "ASYNC",
+    "S",
+    "E",  # pycodestyle errors
+    "F",  # Pyflakes
+    "I",  # isort (import sorting)
+    "B",  # flake8-bugbear (finds potential bugs)
+    "C4", # flake8-comprehensions (encourages more Pythonic comprehensions)
+    "TID",# flake8-tidy-imports (better import structuring)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["S101", "F841"] # Allow `assert` and unused variables in tests
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "tab"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = 140
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.12.1",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+    "pre-commit>=4.5.0",
+    "hypothesis>=6.87.0,<7.0.0",
+    "pyright>=1.1.403",
+    "bandit>=1.7.5,<2.0.0",
+]
+package = false
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--cov=packages --cov=apps --cov-report=term-missing"
+testpaths = [
+    "tests",
+    "packages/python-sdk/tests",
+    "apps/control-plane-api/tests"
+]
+pythonpath = [
+    ".",
+    "packages",
+    "apps"
+]
