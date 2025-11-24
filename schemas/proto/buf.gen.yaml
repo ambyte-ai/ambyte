@@ -1,0 +1,18 @@
+# schemas/proto/buf.gen.yaml
+version: v2
+clean: true
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/ambyte-ai/ambyte-platform/schemas/gen/go
+plugins:
+  # Generates the Python runtime code (_pb2.py)
+  - remote: buf.build/protocolbuffers/python
+    out: ../ambyte_schemas
+  # Generates Python Type Hints (_pb2.pyi) - Critical for IDE autocompletion
+  - remote: buf.build/protocolbuffers/pyi
+    out: ../ambyte_schemas
+  # (Optional) Generates Go code if we need it for the K8s controller later
+  # - remote: buf.build/protocolbuffers/go
+  #   out: ../../gen/go
