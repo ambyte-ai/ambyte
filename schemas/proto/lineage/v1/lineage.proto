@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package lineage.v1;
+
+import "common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+// =============================================================================
+// The Lineage Graph (The "Edges")
+// =============================================================================
+
+// Represents a distinct execution of a process (ETL job, Training Run).
+message Run {
+  // UUID for this specific execution.
+  string id = 1;
+
+  // The type of process.
+  enum RunType {
+    RUN_TYPE_UNSPECIFIED = 0;
+    RUN_TYPE_ETL_TRANSFORM = 1; // Standard SQL/Spark job
+    RUN_TYPE_AI_TRAINING = 2; // Creating a model from scratch
+    RUN_TYPE_AI_FINE_TUNING = 3; // Adapting an existing model
+    RUN_TYPE_AI_RAG_QUERY = 4; // Retrieval step (fleeting lineage)
+    RUN_TYPE_HUMAN_DOWNLOAD = 5; // User downloaded CSV
+  }
+  RunType type = 2;
+
+  // Who/What triggered this?
+  common.v1.Actor triggered_by = 3;
+
+  // When it happened.
+  google.protobuf.Timestamp start_time = 4;
+  google.protobuf.Timestamp end_time = 5;
+
+  // Status (Success/Fail is important for "Did the data actually move?").
+  bool success = 6;
+}
+
+// Represents a direct flow of information: Input(s) -> Output(s).
+message LineageEvent {
+  // The Run associated with this movement.
+  string run_id = 1;
+
+  // The Inputs (Sources).
+  // e.g., ["urn:dataset:snowflake:sales", "urn:dataset:s3:images"]
+  repeated string input_urns = 2;
+
+  // The Outputs (Sinks/Artifacts).
+  // e.g., ["urn:dataset:snowflake:cleaned_sales", "urn:model:huggingface:my-gpt"]
+  repeated string output_urns = 3;
+}
+
+// =============================================================================
+// Model Artifacts (The "AI" Result)
+// =============================================================================
+
+// Represents an AI Model. In the graph, this is usually an Output of a Training Run.
+message ModelArtifact {
+  // UUID
+  string id = 1;
+  string urn = 2; // urn:ambyte:model:v1:gpt-finetune-v1
+
+  string name = 3;
+  string version = 4;
+
+  // High-level categorization.
+  enum ModelType {
+    MODEL_TYPE_UNSPECIFIED = 0;
+    MODEL_TYPE_LLM = 1;
+    MODEL_TYPE_COMPUTER_VISION = 2;
+    MODEL_TYPE_TABULAR_REGRESSOR = 3;
+    MODEL_TYPE_EMBEDDING = 4;
+  }
+  ModelType model_type = 5;
+
+  // The calculated risk level (based on what it does).
+  common.v1.RiskSeverity risk_level = 6;
+
+  // If this model was fine-tuned, what was the parent?
+  string base_model_urn = 7;
+}
