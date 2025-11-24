@@ -16,3 +16,9 @@ repos:
     hooks:
       - id: pyupgrade
         args: [--py311-plus]
+
+  - repo: https://github.com/bufbuild/buf
+    rev: v1.60.0
+    hooks:
+      - id: buf-lint
+      - id: buf-format

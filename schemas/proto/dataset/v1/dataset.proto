@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package dataset.v1;
+
+import "common/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+// Represents a collection of data (Table, File, Bucket, Stream).
+message Dataset {
+  // Internal UUID.
+  string id = 1;
+
+  // Global unique identifier (URN).
+  // e.g. "urn:ambyte:snowflake:prod:sales_db:customers"
+  string urn = 2;
+
+  string name = 3;
+  string description = 4;
+
+  // Owner info (Stewardship).
+  common.v1.Actor owner = 5;
+
+  // The physical or logical location.
+  common.v1.ResourceIdentifier resource = 6;
+
+  // The schema definition (Columns/Fields).
+  repeated SchemaField fields = 7;
+
+  // Overall sensitivity of the dataset (usually max(fields.sensitivity)).
+  common.v1.SensitivityLevel sensitivity = 8;
+
+  // Jurisdiction/Residency.
+  // Must be ISO 3166-1 alpha-2 code (e.g., "US", "DE").
+  // Used by GeofencingRule to allow/block access.
+  string geo_region = 9;
+
+  // Who is the data about?
+  repeated DataSubjectType data_subjects = 10;
+
+  // Rights and Licensing (Crucial for AI Training).
+  LicenseInfo license = 11;
+
+  google.protobuf.Timestamp created_at = 20;
+  google.protobuf.Timestamp updated_at = 21;
+}
+
+// Represents a single column or field within the dataset.
+message SchemaField {
+  string name = 1;
+  string native_type = 2; // e.g., "VARCHAR", "INT64"
+
+  // Is this field Personally Identifiable Information?
+  bool is_pii = 3;
+
+  // Detailed categorization for auto-masking logic.
+  PiiCategory pii_category = 4;
+
+  // Field-specific sensitivity.
+  common.v1.SensitivityLevel sensitivity = 5;
+
+  // If true, this field is the primary key or link key (used for lineage).
+  bool is_identifier = 6;
+}
+
+// =============================================================================
+// Licensing & Rights
+// =============================================================================
+
+message LicenseInfo {
+  // Standard SPDX Identifier if available (e.g., "Apache-2.0", "CC-BY-4.0").
+  string spdx_id = 1;
+
+  // Custom name if no SPDX ID exists (e.g., "Private Commercial Agreement").
+  string name = 2;
+
+  // URL to the full license text.
+  string url = 3;
+
+  // Specific restrictions extracted from the license.
+  bool commercial_use_allowed = 4;
+  bool modification_allowed = 5;
+  bool redistribution_allowed = 6;
+  bool ai_training_allowed = 7; // Specifically for Generative AI
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+// Granular PII types to determine specific masking strategies.
+// e.g. Email -> Partial Mask, SSN -> Full Hash.
+enum PiiCategory {
+  PII_CATEGORY_UNSPECIFIED = 0;
+  PII_CATEGORY_NONE = 1;
+
+  // Direct Identifiers
+  PII_CATEGORY_EMAIL_ADDRESS = 2;
+  PII_CATEGORY_PHONE_NUMBER = 3;
+  PII_CATEGORY_FULL_NAME = 4;
+  PII_CATEGORY_GOV_ID = 5; // SSN, Passport, Driver License
+  PII_CATEGORY_IP_ADDRESS = 6;
+  PII_CATEGORY_DEVICE_ID = 7; // MAC, IMEI, IDFA
+
+  // Indirect/Quasi Identifiers
+  PII_CATEGORY_GEOLOCATION_PRECISE = 8; // Lat/Long
+  PII_CATEGORY_GEOLOCATION_COARSE = 9; // Zip/City
+  PII_CATEGORY_BIRTH_DATE = 10;
+  PII_CATEGORY_GENDER = 11;
+
+  // Special Categories (GDPR Art 9)
+  PII_CATEGORY_HEALTH_DATA = 20; // PHI
+  PII_CATEGORY_BIOMETRIC_DATA = 21; // FaceID, Fingerprint
+  PII_CATEGORY_FINANCIAL_DATA = 22; // Credit Card, Bank Account
+  PII_CATEGORY_POLITICAL_RELIGIOUS = 23;
+}
+
+// Who the data belongs to.
+enum DataSubjectType {
+  DATA_SUBJECT_TYPE_UNSPECIFIED = 0;
+  DATA_SUBJECT_TYPE_CUSTOMER = 1;
+  DATA_SUBJECT_TYPE_EMPLOYEE = 2;
+  DATA_SUBJECT_TYPE_PATIENT = 3;
+  DATA_SUBJECT_TYPE_STUDENT = 4;
+  DATA_SUBJECT_TYPE_MINOR = 5; // Children < 13/16 (Requires strict COPPA/GDPR-K rules)
+  DATA_SUBJECT_TYPE_PUBLIC_FIGURE = 6;
+}

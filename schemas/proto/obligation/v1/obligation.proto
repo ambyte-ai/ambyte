@@ -1,0 +1,143 @@
+syntax = "proto3";
+
+package obligation.v1;
+
+// Standard imports for time handling
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// The top-level object representing a single legal or contractual duty.
+message Obligation {
+  // Unique identifier (UUID)
+  string id = 1;
+
+  // A human-readable title (e.g., "GDPR Data Retention").
+  string title = 2;
+
+  // The raw text extracted from the source document (e.g., "Personal data shall be deleted after 3 years").
+  string description = 3;
+
+  // Metadata about where this obligation came from.
+  SourceProvenance provenance = 4;
+
+  // How strict is this?
+  // BLOCKING: Stop the pipeline/query immediately.
+  // AUDIT_ONLY: Allow but log a warning (soft enforcement).
+  EnforcementLevel enforcement_level = 5;
+
+  // The actual technical constraint.
+  // Using 'oneof' ensures this obligation maps to exactly one logic type.
+  oneof constraint {
+    RetentionRule retention = 10;
+    GeofencingRule geofencing = 11;
+    PurposeRestriction purpose = 12;
+    PrivacyEnhancementRule privacy = 13;
+    AiModelConstraint ai_model = 14;
+  }
+
+  // System timestamps
+  google.protobuf.Timestamp created_at = 20;
+  google.protobuf.Timestamp updated_at = 21;
+}
+
+// =============================================================================
+// Constraint Types
+// =============================================================================
+
+// Rule: "Delete data after X time"
+message RetentionRule {
+  // How long to keep data.
+  google.protobuf.Duration duration = 1;
+
+  // When does the clock start?
+  enum RetentionTrigger {
+    RETENTION_TRIGGER_UNSPECIFIED = 0;
+    RETENTION_TRIGGER_CREATION_DATE = 1; // From when the row was inserted
+    RETENTION_TRIGGER_LAST_ACCESS_DATE = 2; // From when the row was last read
+    RETENTION_TRIGGER_EVENT_DATE = 3; // Based on a business event (e.g., "Contract End")
+  }
+  RetentionTrigger trigger = 2;
+
+  // What creates the exemption? (e.g., "Legal Hold")
+  bool allow_legal_hold_override = 3;
+}
+
+// Rule: "Data must reside in specific regions"
+message GeofencingRule {
+  // List of allowed ISO 3166-1 alpha-2 country codes (e.g., "US", "DE", "JP").
+  repeated string allowed_regions = 1;
+
+  // List of explicitly denied regions.
+  repeated string denied_regions = 2;
+
+  // If true, data cannot leave the region of origin (Data Residency).
+  bool strict_residency = 3;
+}
+
+// Rule: "Data can only be used for X"
+message PurposeRestriction {
+  // Allowed purposes (matches the Ontology defined in dataset.proto later).
+  // e.g., "ANALYTICS", "MARKETING", "DEBUGGING".
+  repeated string allowed_purposes = 1;
+
+  // Explicitly forbidden purposes.
+  repeated string denied_purposes = 2;
+}
+
+// Rule: "Data must be masked/tokenized"
+message PrivacyEnhancementRule {
+  enum PrivacyMethod {
+    PRIVACY_METHOD_UNSPECIFIED = 0;
+    PRIVACY_METHOD_PSEUDONYMIZATION = 1; // Reversible tokenization
+    PRIVACY_METHOD_ANONYMIZATION = 2; // Irreversible hashing/suppression
+    PRIVACY_METHOD_DIFFERENTIAL_PRIVACY = 3; // Noise addition
+    PRIVACY_METHOD_ROW_LEVEL_SECURITY = 4; // Access filtering
+  }
+  PrivacyMethod method = 1;
+
+  // Specific args for the method (e.g., "epsilon" for diff privacy).
+  map<string, string> parameters = 2;
+}
+
+// Rule: "Restrictions on AI/ML usage"
+message AiModelConstraint {
+  // Can this data be used for training?
+  bool training_allowed = 1;
+
+  // Can this data be used for fine-tuning existing models?
+  bool fine_tuning_allowed = 2;
+
+  // Can this data be used in RAG (Retrieval Augmented Generation) context windows?
+  bool rag_usage_allowed = 3;
+
+  // Does the output model need to be open-sourced? (Viral license check like GPL).
+  bool requires_open_source_release = 4;
+
+  // Attribution requirements (e.g., CC-BY).
+  string attribution_text_required = 5;
+}
+
+// =============================================================================
+// Metadata & Enums
+// =============================================================================
+
+message SourceProvenance {
+  // e.g., "Contract-102", "GDPR-Art-17"
+  string source_id = 1;
+
+  // e.g., "MSA", "DPA", "REGULATION", "INTERNAL_POLICY"
+  string document_type = 2;
+
+  // The specific section/clause text for audit trails.
+  string section_reference = 3;
+
+  // URL or path to the original document
+  string document_uri = 4;
+}
+
+enum EnforcementLevel {
+  ENFORCEMENT_LEVEL_UNSPECIFIED = 0;
+  ENFORCEMENT_LEVEL_BLOCKING = 1; // Strict failure
+  ENFORCEMENT_LEVEL_AUDIT_ONLY = 2; // Log violation but proceed
+  ENFORCEMENT_LEVEL_NOTIFY_HUMAN = 3; // Trigger an approval workflow
+}

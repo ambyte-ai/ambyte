@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package common.v1;
+
+// =============================================================================
+// Security & Risk Classifications
+// =============================================================================
+
+// Standard data sensitivity classification.
+// Used to tag Datasets and define policy thresholds.
+enum SensitivityLevel {
+  SENSITIVITY_LEVEL_UNSPECIFIED = 0;
+
+  // Data intended for public consumption.
+  // No restrictions on access or distribution.
+  SENSITIVITY_LEVEL_PUBLIC = 1;
+
+  // Data accessible to all employees/internal systems.
+  SENSITIVITY_LEVEL_INTERNAL = 2;
+
+  // Data restricted to specific teams or roles.
+  // Requires authorization and audit logging.
+  SENSITIVITY_LEVEL_CONFIDENTIAL = 3;
+
+  // Data causing severe harm if leaked (e.g., Passwords, Keys, highly sensitive PII).
+  // Requires strict need-to-know, encryption, and immediate alerting on access.
+  SENSITIVITY_LEVEL_RESTRICTED = 4;
+}
+
+// Risk levels often associated with AI models or High-Risk Processing (DPIA).
+// Aligned roughly with EU AI Act categories.
+enum RiskSeverity {
+  RISK_SEVERITY_UNSPECIFIED = 0;
+
+  // Minimal or no risk.
+  RISK_SEVERITY_LOW = 1;
+
+  // e.g., Chatbots, Emotion Recognition (requires transparency).
+  RISK_SEVERITY_MEDIUM = 2;
+
+  // e.g., Critical Infrastructure, Employment, Credit Scoring, Law Enforcement.
+  // Requires strict conformity assessments.
+  RISK_SEVERITY_HIGH = 3;
+
+  // e.g., Social Scoring, Real-time biometric ID in public spaces.
+  // Prohibited by default.
+  RISK_SEVERITY_UNACCEPTABLE = 4;
+}
+
+// =============================================================================
+// Identity & Resources
+// =============================================================================
+
+// Represents the entity requesting access or performing an action.
+message Actor {
+  // Internal ID (e.g., Auth0 ID, IAM ARN).
+  string id = 1;
+
+  // HUMAN or SERVICE_ACCOUNT.
+  enum ActorType {
+    ACTOR_TYPE_UNSPECIFIED = 0;
+    ACTOR_TYPE_HUMAN = 1;
+    ACTOR_TYPE_SERVICE_ACCOUNT = 2;
+    ACTOR_TYPE_SYSTEM_INTERNAL = 3; // The Ambyte platform itself
+  }
+  ActorType type = 2;
+
+  // Roles or groups this actor belongs to (e.g., "DataScientists", "Admins").
+  repeated string roles = 3;
+}
+
+// A generic way to reference any data asset or model across different clouds.
+message ResourceIdentifier {
+  // The platform hosting the resource.
+  // e.g., "snowflake", "aws-s3", "huggingface", "postgres".
+  string platform = 1;
+
+  // The fully qualified name or path.
+  // e.g., "prod_db.sales_schema.customers" or "s3://my-bucket/data.parquet"
+  string location = 2;
+
+  // The native ID used by the cloud provider (ARN, Resource ID).
+  string native_id = 3;
+}
+
+// Generic key-value pair for tagging and metadata.
+message Tag {
+  string key = 1;
+  string value = 2;
+}
