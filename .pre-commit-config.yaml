@@ -1,3 +1,8 @@
+exclude: |
+    (?x)^(
+        \.venv/|
+    )
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.12.10
@@ -22,3 +27,14 @@ repos:
     hooks:
       - id: buf-lint
       - id: buf-format
+
+  - repo: https://github.com/open-policy-agent/regal
+    rev: v0.37.0
+    hooks:
+      - id: regal-lint
+
+  - repo: https://github.com/anderseknert/pre-commit-opa
+    rev: v1.5.1
+    hooks:
+    - id: opa-fmt
+      args: [--write]
