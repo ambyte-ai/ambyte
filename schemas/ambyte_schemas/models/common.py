@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import List
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -76,11 +76,12 @@ class ResourceIdentifier(AmbyteBaseModel):
 class Actor(AmbyteBaseModel):
 	id: str
 	type: ActorType
-	roles: List[str] = Field(default_factory=list)
+	roles: list[str] = Field(default_factory=list)
+	attributes: dict[str, str] = Field(default_factory=dict)
 
 	def to_proto(self) -> common_pb2.Actor:
-		return common_pb2.Actor(id=self.id, type=self.type.value, roles=self.roles)
+		return common_pb2.Actor(id=self.id, type=cast(Any, self.type), roles=self.roles, attributes=self.attributes)
 
 	@classmethod
 	def from_proto(cls, proto: common_pb2.Actor) -> 'Actor':
-		return cls(id=proto.id, type=ActorType(proto.type), roles=list(proto.roles))
+		return cls(id=proto.id, type=ActorType(proto.type), roles=list(proto.roles), attributes=dict(proto.attributes))

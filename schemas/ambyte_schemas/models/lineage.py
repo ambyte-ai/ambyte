@@ -1,6 +1,5 @@
 from datetime import datetime
 from enum import IntEnum
-from typing import List, Optional
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from pydantic import Field
@@ -38,9 +37,9 @@ class ModelType(IntEnum):
 class Run(AmbyteBaseModel):
 	id: str
 	type: RunType
-	triggered_by: Optional[Actor] = None
-	start_time: Optional[datetime] = None
-	end_time: Optional[datetime] = None
+	triggered_by: Actor | None = None
+	start_time: datetime | None = None
+	end_time: datetime | None = None
 	success: bool = False
 
 	def to_proto(self) -> lineage_pb2.Run:
@@ -75,8 +74,8 @@ class Run(AmbyteBaseModel):
 
 class LineageEvent(AmbyteBaseModel):
 	run_id: str
-	input_urns: List[str] = Field(default_factory=list)
-	output_urns: List[str] = Field(default_factory=list)
+	input_urns: list[str] = Field(default_factory=list)
+	output_urns: list[str] = Field(default_factory=list)
 
 	def to_proto(self) -> lineage_pb2.LineageEvent:
 		return lineage_pb2.LineageEvent(run_id=self.run_id, input_urns=self.input_urns, output_urns=self.output_urns)

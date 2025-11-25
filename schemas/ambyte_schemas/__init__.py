@@ -1,5 +1,13 @@
+import os
+import sys
+
+_proto_dir = os.path.join(os.path.dirname(__file__), 'proto')
+if _proto_dir not in sys.path:
+	sys.path.append(_proto_dir)
+
+
 # Expose the Pydantic models as the primary API
-from ambyte_schemas.models.common import (
+from ambyte_schemas.models.common import (  # noqa: E402
 	Actor,
 	ActorType,
 	ResourceIdentifier,
@@ -7,21 +15,21 @@ from ambyte_schemas.models.common import (
 	SensitivityLevel,
 	Tag,
 )
-from ambyte_schemas.models.dataset import (
+from ambyte_schemas.models.dataset import (  # noqa: E402
 	Dataset,
 	DataSubjectType,
 	LicenseInfo,
 	PiiCategory,
 	SchemaField,
 )
-from ambyte_schemas.models.lineage import (
+from ambyte_schemas.models.lineage import (  # noqa: E402
 	LineageEvent,
 	ModelArtifact,
 	ModelType,
 	Run,
 	RunType,
 )
-from ambyte_schemas.models.obligation import (
+from ambyte_schemas.models.obligation import (  # noqa: E402
 	AiModelConstraint,
 	EnforcementLevel,
 	GeofencingRule,

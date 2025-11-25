@@ -94,6 +94,17 @@ docstring-code-format = true
 docstring-code-line-length = 140
 
 [tool.pyright]
+exclude = [
+    ".venv/",
+    ".venv*/",
+    ".git/",
+    "__pycache__/",
+    "**/site-packages/",
+    "./test_*.py",
+    "./debug_*.py",
+    "private_example/",
+    "debug/*",
+]
 venvPath = "."
 venv = ".venv"
 
@@ -102,6 +113,7 @@ dev-dependencies = [
     "ruff>=0.12.1",
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0,<1.0.0",
+    "pytest-cov>=7.0.0",
     "pre-commit>=4.5.0",
     "hypothesis>=6.87.0,<7.0.0",
     "pyright>=1.1.403",

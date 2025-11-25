@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from enum import IntEnum
-from typing import Dict, List, Optional
 
 from google.protobuf.duration_pb2 import Duration
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -64,8 +63,8 @@ class RetentionRule(AmbyteBaseModel):
 
 
 class GeofencingRule(AmbyteBaseModel):
-	allowed_regions: List[str] = Field(default_factory=list)
-	denied_regions: List[str] = Field(default_factory=list)
+	allowed_regions: list[str] = Field(default_factory=list)
+	denied_regions: list[str] = Field(default_factory=list)
 	strict_residency: bool = False
 
 	def to_proto(self) -> obligation_pb2.GeofencingRule:
@@ -85,8 +84,8 @@ class GeofencingRule(AmbyteBaseModel):
 
 
 class PurposeRestriction(AmbyteBaseModel):
-	allowed_purposes: List[str] = Field(default_factory=list)
-	denied_purposes: List[str] = Field(default_factory=list)
+	allowed_purposes: list[str] = Field(default_factory=list)
+	denied_purposes: list[str] = Field(default_factory=list)
 
 	def to_proto(self) -> obligation_pb2.PurposeRestriction:
 		return obligation_pb2.PurposeRestriction(
@@ -100,7 +99,7 @@ class PurposeRestriction(AmbyteBaseModel):
 
 class PrivacyEnhancementRule(AmbyteBaseModel):
 	method: PrivacyMethod
-	parameters: Dict[str, str] = Field(default_factory=dict)
+	parameters: dict[str, str] = Field(default_factory=dict)
 
 	def to_proto(self) -> obligation_pb2.PrivacyEnhancementRule:
 		return obligation_pb2.PrivacyEnhancementRule(method=self.method.value, parameters=self.parameters)
@@ -176,14 +175,14 @@ class Obligation(AmbyteBaseModel):
 	# We use Optional fields to represent the 'OneOf'.
 	# In Pydantic validation, you might want to enforce that exactly one is set,
 	# but for simplicity we keep them optional here.
-	retention: Optional[RetentionRule] = None
-	geofencing: Optional[GeofencingRule] = None
-	purpose: Optional[PurposeRestriction] = None
-	privacy: Optional[PrivacyEnhancementRule] = None
-	ai_model: Optional[AiModelConstraint] = None
+	retention: RetentionRule | None = None
+	geofencing: GeofencingRule | None = None
+	purpose: PurposeRestriction | None = None
+	privacy: PrivacyEnhancementRule | None = None
+	ai_model: AiModelConstraint | None = None
 
-	created_at: Optional[datetime] = None
-	updated_at: Optional[datetime] = None
+	created_at: datetime | None = None
+	updated_at: datetime | None = None
 
 	def to_proto(self) -> obligation_pb2.Obligation:
 		# Handle Timestamps

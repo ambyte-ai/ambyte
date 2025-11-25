@@ -32,10 +32,14 @@ adequate_countries := {
 # MAIN RULES
 # ==============================================================================
 
-# Default: Allow unless denied
+# METADATA
+# description: Default decision is to allow access unless explicitly denied.
+# entrypoint: true
 default allow := true
 
-# The "deny" set collects all reasons why this access should be blocked.
+# METADATA
+# description: Returns a set of reasons why access should be blocked based on GDPR residency rules.
+# entrypoint: true
 deny contains msg if {
 	# 1. Scope: Only applies if the Dataset is legally resident in the EU/EEA
 	utils.is_eu_region(input.dataset.geo_region)

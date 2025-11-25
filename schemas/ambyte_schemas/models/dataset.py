@@ -1,6 +1,5 @@
 from datetime import datetime
 from enum import IntEnum
-from typing import List, Optional
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from pydantic import Field
@@ -125,16 +124,16 @@ class Dataset(AmbyteBaseModel):
 	urn: str
 	name: str
 	description: str = ''
-	owner: Optional[Actor] = None
-	resource: Optional[ResourceIdentifier] = None
-	fields: List[SchemaField] = Field(default_factory=list)
+	owner: Actor | None = None
+	resource: ResourceIdentifier | None = None
+	fields: list[SchemaField] = Field(default_factory=list)
 	sensitivity: SensitivityLevel = SensitivityLevel.UNSPECIFIED
 	geo_region: str = ''  # ISO Code
-	data_subjects: List[DataSubjectType] = Field(default_factory=list)
-	license: Optional[LicenseInfo] = None
+	data_subjects: list[DataSubjectType] = Field(default_factory=list)
+	license: LicenseInfo | None = None
 
-	created_at: Optional[datetime] = None
-	updated_at: Optional[datetime] = None
+	created_at: datetime | None = None
+	updated_at: datetime | None = None
 
 	def to_proto(self) -> dataset_pb2.Dataset:
 		# Handle Timestamps
