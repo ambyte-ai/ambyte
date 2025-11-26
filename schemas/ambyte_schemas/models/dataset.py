@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import IntEnum
+from typing import Any, cast
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from pydantic import Field
@@ -97,8 +98,8 @@ class SchemaField(AmbyteBaseModel):
 			name=self.name,
 			native_type=self.native_type,
 			is_pii=self.is_pii,
-			pii_category=self.pii_category.value,
-			sensitivity=self.sensitivity.value,
+			pii_category=cast(Any, self.pii_category),
+			sensitivity=self.sensitivity,
 			is_identifier=self.is_identifier,
 		)
 
@@ -153,9 +154,9 @@ class Dataset(AmbyteBaseModel):
 			owner=self.owner.to_proto() if self.owner else None,
 			resource=self.resource.to_proto() if self.resource else None,
 			fields=[f.to_proto() for f in self.fields],
-			sensitivity=self.sensitivity.value,
+			sensitivity=self.sensitivity,
 			geo_region=self.geo_region,
-			data_subjects=[ds.value for ds in self.data_subjects],
+			data_subjects=cast(Any, self.data_subjects),
 			license=self.license.to_proto() if self.license else None,
 			created_at=created_ts if self.created_at else None,
 			updated_at=updated_ts if self.updated_at else None,
@@ -163,6 +164,9 @@ class Dataset(AmbyteBaseModel):
 
 	@classmethod
 	def from_proto(cls, proto: dataset_pb2.Dataset) -> 'Dataset':
+		def to_dt(ts: Timestamp) -> datetime:
+			return ts.ToDatetime().replace(tzinfo=timezone.utc)
+
 		return cls(
 			id=proto.id,
 			urn=proto.urn,
@@ -176,6 +180,6 @@ class Dataset(AmbyteBaseModel):
 			data_subjects=[DataSubjectType(ds) for ds in proto.data_subjects],
 			license=LicenseInfo.from_proto(proto.license) if proto.HasField('license') else None,
 			# Convert Protobuf Timestamp to Python datetime
-			created_at=proto.created_at.ToDatetime() if proto.HasField('created_at') else None,
-			updated_at=proto.updated_at.ToDatetime() if proto.HasField('updated_at') else None,
+			created_at=to_dt(proto.created_at) if proto.HasField('created_at') else None,
+			updated_at=to_dt(proto.updated_at) if proto.HasField('updated_at') else None,
 		)

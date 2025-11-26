@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import IntEnum
+from typing import Any, cast
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from pydantic import Field
@@ -53,7 +54,7 @@ class Run(AmbyteBaseModel):
 
 		return lineage_pb2.Run(
 			id=self.id,
-			type=self.type.value,
+			type=cast(Any, self.type),
 			triggered_by=self.triggered_by.to_proto() if self.triggered_by else None,
 			start_time=start_ts if self.start_time else None,
 			end_time=end_ts if self.end_time else None,
@@ -62,12 +63,15 @@ class Run(AmbyteBaseModel):
 
 	@classmethod
 	def from_proto(cls, proto: lineage_pb2.Run) -> 'Run':
+		def to_dt(ts: Timestamp) -> datetime:
+			return ts.ToDatetime().replace(tzinfo=timezone.utc)
+
 		return cls(
 			id=proto.id,
 			type=RunType(proto.type),
 			triggered_by=Actor.from_proto(proto.triggered_by) if proto.HasField('triggered_by') else None,
-			start_time=proto.start_time.ToDatetime() if proto.HasField('start_time') else None,
-			end_time=proto.end_time.ToDatetime() if proto.HasField('end_time') else None,
+			start_time=to_dt(proto.start_time) if proto.HasField('start_time') else None,
+			end_time=to_dt(proto.end_time) if proto.HasField('end_time') else None,
 			success=proto.success,
 		)
 
@@ -100,8 +104,8 @@ class ModelArtifact(AmbyteBaseModel):
 			urn=self.urn,
 			name=self.name,
 			version=self.version,
-			model_type=self.model_type.value,
-			risk_level=self.risk_level.value,
+			model_type=cast(Any, self.model_type),
+			risk_level=self.risk_level,
 			base_model_urn=self.base_model_urn,
 		)
 

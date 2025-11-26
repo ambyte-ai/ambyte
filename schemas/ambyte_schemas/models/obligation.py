@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from enum import IntEnum
+from typing import Any, cast
 
 from google.protobuf.duration_pb2 import Duration
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -50,7 +51,9 @@ class RetentionRule(AmbyteBaseModel):
 		dur_proto.FromTimedelta(self.duration)
 
 		return obligation_pb2.RetentionRule(
-			duration=dur_proto, trigger=self.trigger.value, allow_legal_hold_override=self.allow_legal_hold_override
+			duration=dur_proto,
+			trigger=cast(Any, self.trigger),
+			allow_legal_hold_override=self.allow_legal_hold_override,
 		)
 
 	@classmethod
@@ -102,7 +105,7 @@ class PrivacyEnhancementRule(AmbyteBaseModel):
 	parameters: dict[str, str] = Field(default_factory=dict)
 
 	def to_proto(self) -> obligation_pb2.PrivacyEnhancementRule:
-		return obligation_pb2.PrivacyEnhancementRule(method=self.method.value, parameters=self.parameters)
+		return obligation_pb2.PrivacyEnhancementRule(method=cast(Any, self.method), parameters=self.parameters)
 
 	@classmethod
 	def from_proto(cls, proto: obligation_pb2.PrivacyEnhancementRule) -> 'PrivacyEnhancementRule':
@@ -200,7 +203,7 @@ class Obligation(AmbyteBaseModel):
 			title=self.title,
 			description=self.description,
 			provenance=self.provenance.to_proto(),
-			enforcement_level=self.enforcement_level.value,
+			enforcement_level=cast(Any, self.enforcement_level),
 			created_at=created_ts if self.created_at else None,
 			updated_at=updated_ts if self.updated_at else None,
 		)

@@ -57,7 +57,7 @@ def test_enum_instantiation():
 	assert a1.type == ActorType.HUMAN
 
 	# 2. Using Integer directly (Pydantic allows this)
-	a2 = Actor(id='2', type=1)
+	a2 = Actor(id='2', type=1)  # type: ignore
 	assert a2.type == ActorType.HUMAN
 
 
@@ -73,7 +73,7 @@ def test_tag_model():
 	assert t.value == 'prod'
 
 	with pytest.raises(ValidationError):
-		Tag(key='env')  # Missing value
+		Tag(key='env')  # type: ignore # Missing value
 
 
 def test_resource_identifier_defaults():

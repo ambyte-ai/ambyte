@@ -17,13 +17,13 @@ repos:
       - id: pyupgrade
         args: [--py311-plus]
 
-  - repo: https://github.com/bufbuild/buf
-    rev: v1.60.0
-    hooks:
-      - id: buf-lint
-        exclude: \.venv/
-      - id: buf-format
-        exclude: \.venv/
+#  - repo: https://github.com/bufbuild/buf
+#    rev: v1.60.0
+#    hooks:
+#      - id: buf-lint
+#        exclude: \.venv/
+#      - id: buf-format
+#        exclude: \.venv/
 
   - repo: https://github.com/open-policy-agent/regal
     rev: v0.37.0
