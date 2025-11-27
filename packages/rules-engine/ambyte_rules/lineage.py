@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any
 
 import networkx as nx
 from ambyte_schemas.models.common import RiskSeverity, SensitivityLevel
@@ -17,7 +17,7 @@ class LineageGraph:
 
 		# Local cache of node attributes (e.g. {'urn:1': {'risk': 3}})
 		# In a real system, this would be fetched from the Control Plane DB.
-		self.node_metadata: Dict[str, Dict[str, Any]] = {}
+		self.node_metadata: dict[str, dict[str, Any]] = {}
 
 	def add_event(self, event: LineageEvent):
 		"""
@@ -85,7 +85,7 @@ class LineageGraph:
 
 		return max_sens
 
-	def get_poisoned_constraints(self, target_urn: str) -> List[str]:
+	def get_poisoned_constraints(self, target_urn: str) -> list[str]:
 		"""
 		Identifies upstream nodes that explicitly FORBID downstream usage.
 
