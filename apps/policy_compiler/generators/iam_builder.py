@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, List
+from typing import Any
 
 from ambyte_rules.models import ResolvedPolicy
 
@@ -25,7 +25,7 @@ class IamPolicyBuilder:
 		Returns:
 		A JSON string representing the IAM Policy.
 		"""
-		statements: List[Dict[str, Any]] = []
+		statements: list[dict[str, Any]] = []
 
 		# 1. Geofencing (Region Restrictions)
 		if policy.geofencing:
