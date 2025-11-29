@@ -133,8 +133,8 @@ def audit(resource: ResourceResolver, action: str = 'use'):
 				try:
 					urn = _resolve_resource(resource, args, kwargs)
 					client.log_access(urn, action, allowed=True)
-				except Exception:
-					pass  # Never crash in audit wrapper
+				except Exception as e:
+					logger.warning(f'Audit decorator failed to log access: {e}')  # pylint: disable=logging-fstring-interpolation
 
 				return result
 
@@ -149,8 +149,8 @@ def audit(resource: ResourceResolver, action: str = 'use'):
 			try:
 				urn = _resolve_resource(resource, args, kwargs)
 				client.log_access(urn, action, allowed=True)
-			except Exception:
-				pass
+			except Exception as e:
+				logger.warning(f'Audit decorator failed to log access: {e}')  # pylint: disable=logging-fstring-interpolation
 
 			return result
 

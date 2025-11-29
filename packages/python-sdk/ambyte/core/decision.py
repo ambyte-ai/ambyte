@@ -46,7 +46,7 @@ class DecisionEngine:
 	# PUBLIC API
 	# ==========================================================================
 
-	def check_access(self, resource_urn: str, action: str, context: Optional[dict[str, Any]] = None) -> bool:
+	def check_access(self, resource_urn: str, action: str, context: dict[str, Any] | None = None) -> bool:
 		"""
 		Synchronous entry point for permission checking.
 		"""
@@ -73,9 +73,7 @@ class DecisionEngine:
 		self._cache[cache_key] = is_allowed
 		return is_allowed
 
-	async def check_access_async(
-		self, resource_urn: str, action: str, context: Optional[dict[str, Any]] = None
-	) -> bool:
+	async def check_access_async(self, resource_urn: str, action: str, context: dict[str, Any] | None = None) -> bool:
 		"""
 		Asynchronous entry point for permission checking.
 		"""
@@ -103,7 +101,7 @@ class DecisionEngine:
 	# INTERNAL LOGIC
 	# ==========================================================================
 
-	def _resolve_full_context(self, explicit_context: Optional[dict]) -> tuple[str, dict]:
+	def _resolve_full_context(self, explicit_context: dict | None) -> tuple[str, dict]:
 		"""
 		Merges explicitly passed arguments with implicit ContextVars.
 		Returns (actor_id, merged_context_dict).
@@ -166,7 +164,7 @@ class DecisionEngine:
 			return
 
 		try:
-			with open(path, 'r', encoding='utf-8') as f:
+			with open(path, encoding='utf-8') as f:
 				self._local_policy_data = json.load(f)
 			logger.info(f'Loaded local policy bundle from {path}')  # pylint: disable=logging-fstring-interpolation
 		except json.JSONDecodeError as e:

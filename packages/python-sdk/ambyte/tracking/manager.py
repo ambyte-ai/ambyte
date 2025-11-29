@@ -2,7 +2,6 @@ import atexit
 import logging
 import queue
 import threading
-import time
 from typing import Any, Literal
 
 from ambyte.client import get_client
@@ -80,7 +79,8 @@ class TrackingManager:
 		"""
 		while not self._stop_event.is_set():
 			# Sleep for interval
-			time.sleep(self.config.batch_upload_interval_seconds)
+			if self._stop_event.wait(timeout=self.config.batch_upload_interval_seconds):
+				break
 			self._flush_batch()
 
 	def _flush_batch(self):

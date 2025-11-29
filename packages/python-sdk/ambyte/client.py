@@ -59,8 +59,8 @@ class AmbyteClient:
 			import asyncio
 
 			asyncio.create_task(self._async_client.aclose())
-		except Exception:
-			pass
+		except Exception as e:
+			logger.warning(f'Failed to close async HTTP client cleanly: {e}')  # pylint: disable=logging-fstring-interpolation
 
 	# ==========================================================================
 	# INTERNAL HELPERS

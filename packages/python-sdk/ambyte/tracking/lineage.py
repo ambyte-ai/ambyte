@@ -1,7 +1,6 @@
 import uuid
 from datetime import datetime, timezone
 from types import TracebackType
-from typing import Optional, Type
 
 from ambyte.context import AmbyteContext
 from ambyte.tracking.manager import get_tracker
@@ -18,9 +17,9 @@ class LineageTracer:
 		self,
 		name: str,
 		run_type: RunType = RunType.ETL_TRANSFORM,
-		inputs: Optional[list[str]] = None,
-		outputs: Optional[list[str]] = None,
-		actor: Optional[Actor] = None,
+		inputs: list[str] | None = None,
+		outputs: list[str] | None = None,
+		actor: Actor | None = None,
 	):
 		self.run_id = str(uuid.uuid4())
 		self.name = name
@@ -30,7 +29,7 @@ class LineageTracer:
 		self.actor = actor
 
 		self.tracker = get_tracker()
-		self.start_time: Optional[datetime] = None
+		self.start_time: datetime | None = None
 
 		# Determine Context
 		# We need to set the global run_id so nested checks are attributed to us
@@ -56,9 +55,9 @@ class LineageTracer:
 
 	def __exit__(
 		self,
-		exc_type: Optional[Type[BaseException]],
-		exc_value: Optional[BaseException],
-		traceback: Optional[TracebackType],
+		exc_type: type[BaseException] | None,
+		exc_value: BaseException | None,
+		traceback: TracebackType | None,
 	) -> None:
 		end_time = datetime.now(timezone.utc)
 		is_success = exc_type is None
@@ -79,7 +78,7 @@ class LineageTracer:
 
 # DX Helper
 def trace(
-	name: str = 'script_execution', inputs: Optional[list[str]] = None, outputs: Optional[list[str]] = None
+	name: str = 'script_execution', inputs: list[str] | None = None, outputs: list[str] | None = None
 ) -> LineageTracer:
 	"""
 	Wraps a block of code to track data lineage.
