@@ -28,17 +28,17 @@ def templates_dir(tmp_path: Path):
 	required by the PolicyCompilerService.
 	"""
 	sql_content = """
-    -- {{ comment }}
-    CREATE OR REPLACE MASKING POLICY {{ policy_name }} AS (val {{ input_type }}) RETURNS {{ input_type }} ->
+	-- {{ comment }}
+	CREATE OR REPLACE MASKING POLICY {{ policy_name }} AS (val {{ input_type }}) RETURNS {{ input_type }} ->
       CASE
-        WHEN current_role() IN ({% for role in allowed_roles %}'{{ role }}'{% if not loop.last %}, {% endif %}{% endfor %}) THEN val
-        {% if method == 'HASH' %}
-        ELSE sha2(val)
-        {% else %}
-        ELSE '***MASKED***'
-        {% endif %}
+		WHEN current_role() IN ({% for role in allowed_roles %}'{{ role }}'{% if not loop.last %}, {% endif %}{% endfor %}) THEN val
+		{% if method == 'HASH' %}
+		ELSE sha2(val)
+		{% else %}
+		ELSE '***MASKED***'
+		{% endif %}
       END;
-    """
+	"""  # noqa: E501, E101
 	d = tmp_path / 'sql_templates'
 	d.mkdir()
 	p = d / 'masking.sql'
@@ -129,7 +129,7 @@ def test_pipeline_opa_geofencing():
 	   - Rule C denies: CA (Explicit deny removes CA)
 	2. Result should be: US only.
 	3. Generator should produce OPA Data Bundle JSON.
-	"""
+	"""  # noqa: E101
 	service = PolicyCompilerService()  # No templates needed for OPA
 
 	obs = [

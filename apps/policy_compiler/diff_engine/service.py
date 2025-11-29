@@ -1,5 +1,3 @@
-from typing import Optional
-
 from ambyte_rules.models import EffectiveAiRules, EffectiveGeofencing, EffectiveRetention, ResolvedPolicy
 
 from apps.policy_compiler.diff_engine.models import ChangeImpact, ChangeType, DiffItem, PolicyDiffReport
@@ -28,9 +26,7 @@ class SemanticDiffEngine:
 
 		return report
 
-	def _diff_retention(
-		self, old: Optional[EffectiveRetention], new: Optional[EffectiveRetention], report: PolicyDiffReport
-	):
+	def _diff_retention(self, old: EffectiveRetention | None, new: EffectiveRetention | None, report: PolicyDiffReport):
 		if old == new:
 			return
 
@@ -99,7 +95,7 @@ class SemanticDiffEngine:
 				)
 
 	def _diff_geofencing(
-		self, old: Optional[EffectiveGeofencing], new: Optional[EffectiveGeofencing], report: PolicyDiffReport
+		self, old: EffectiveGeofencing | None, new: EffectiveGeofencing | None, report: PolicyDiffReport
 	):
 		if old == new:
 			return
@@ -166,7 +162,7 @@ class SemanticDiffEngine:
 					)
 				)
 
-	def _diff_ai(self, old: Optional[EffectiveAiRules], new: Optional[EffectiveAiRules], report: PolicyDiffReport):
+	def _diff_ai(self, old: EffectiveAiRules | None, new: EffectiveAiRules | None, report: PolicyDiffReport):
 		if old == new:
 			return
 

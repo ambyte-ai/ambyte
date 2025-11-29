@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal
 
 from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ResolvedPolicy
@@ -20,7 +20,7 @@ class PolicyCompilerService:
 	Raw Obligations -> Conflict Resolution -> Optimized Code Generation.
 	"""
 
-	def __init__(self, templates_path: Optional[Path] = None):
+	def __init__(self, templates_path: Path | None = None):
 		# 1. The Brain (Logic)
 		self.rules_engine = ConflictResolutionEngine()
 
@@ -41,8 +41,8 @@ class PolicyCompilerService:
 		obligations: list[Obligation],
 		target: TargetPlatform,
 		# Context args for specific generators
-		context: Optional[dict[str, Union[str, list[str]]]] = None,
-	) -> Union[str, dict]:
+		context: dict[str, str | list[str]] | None = None,
+	) -> str | dict:
 		"""
 		Compiles a list of obligations into an executable artifact for a specific target.
 
@@ -66,9 +66,9 @@ class PolicyCompilerService:
 		# Step 2: Route to Generator
 		if target == 'snowflake':
 			return self._compile_snowflake(effective_policy, context)
-		elif target == 'opa':
+		if target == 'opa':
 			return self._compile_opa(effective_policy)
-		elif target == 'aws_iam':
+		if target == 'aws_iam':
 			return self._compile_iam(effective_policy, context)
 		else:
 			raise ValueError(f'Unsupported compilation target: {target}')
