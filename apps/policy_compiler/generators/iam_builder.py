@@ -85,7 +85,7 @@ class IamPolicyBuilder:
 					],
 					'Resource': '*',  # SageMaker jobs often don't resource-level lock inputs easily,
 					'Condition': {  # so we block the action contextually if possible, or bind to resource
-						# This is an approximation. In real AWS, restricting input sources
+						# This is an approximation. In real AWS, restricting input sources # TODO
 						# for SageMaker requires complex VPC Endpoint policies or S3 Bucket Policies.
 						# Here we generate a Bucket Policy snippet assuming 'resource_arn' is an S3 bucket.
 						'StringLike': {'sagemaker:InputDataConfig': resource_arn}

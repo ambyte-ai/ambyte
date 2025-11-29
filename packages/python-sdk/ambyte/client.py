@@ -90,8 +90,8 @@ class AmbyteClient:
 		self,
 		resource_urn: str,
 		action: str,
-		actor_id: Optional[str],
-		context: Optional[dict[str, Any]],
+		actor_id: str | None,
+		context: dict[str, Any] | None,
 	) -> dict[str, Any]:
 		"""
 		Constructs the request payload by merging explicit arguments
@@ -127,24 +127,44 @@ class AmbyteClient:
 			'context': final_context,
 		}
 
-	# ==========================================================================
-	# PERMISSION CHECKS (SYNC)
-	# ==========================================================================
-
 	@retry(
-		retry=retry_if_exception_type(
-			httpx.HTTPStatusError
-		),  # Only retry 5xx errors, not connection errors immediately
+		retry=retry_if_exception_type(httpx.HTTPStatusError),
 		stop=stop_after_attempt(3),
 		wait=wait_exponential(multiplier=1, min=2, max=10),
 		reraise=True,
 	)
+	def _send_check_request(self, payload: dict[str, Any]) -> httpx.Response:
+		"""
+		Internal wrapper to perform the request with retry logic.
+		"""
+		response = self._client.post('/v1/check', json=payload)
+		response.raise_for_status()
+		return response
+
+	@retry(
+		retry=retry_if_exception_type(httpx.HTTPStatusError),
+		stop=stop_after_attempt(3),
+		wait=wait_exponential(multiplier=1, min=2, max=10),
+		reraise=True,
+	)
+	async def _send_check_request_async(self, payload: dict[str, Any]) -> httpx.Response:
+		"""
+		Internal wrapper to perform the async request with retry logic.
+		"""
+		response = await self._async_client.post('/v1/check', json=payload)
+		response.raise_for_status()
+		return response
+
+	# ==========================================================================
+	# PERMISSION CHECKS (SYNC)
+	# ==========================================================================
+
 	def check_permission(
 		self,
 		resource_urn: str,
 		action: str,
-		actor_id: Optional[str] = None,
-		context: Optional[dict[str, Any]] = None,
+		actor_id: str | None = None,
+		context: dict[str, Any] | None = None,
 	) -> bool:
 		"""
 		Blocking call to check if an action is allowed.
@@ -156,28 +176,23 @@ class AmbyteClient:
 		payload = self._build_check_payload(resource_urn, action, actor_id, context)
 
 		try:
-			response = self._client.post('/v1/check', json=payload)
-			response.raise_for_status()
+			# Delegate to internal method that handles retries
+			response = self._send_check_request(payload)
 
 			# Expecting API format: {"result": "ALLOW" | "DENY", ...}
 			data = response.json()
 			return data.get('result') == 'ALLOW'
 
 		except httpx.HTTPError as e:
+			# Catch connection errors or exhausted retries
 			return self._handle_connection_error(e)
 
 	# ==========================================================================
 	# PERMISSION CHECKS (ASYNC)
 	# ==========================================================================
 
-	@retry(
-		retry=retry_if_exception_type(httpx.HTTPStatusError),
-		stop=stop_after_attempt(3),
-		wait=wait_exponential(multiplier=1, min=2, max=10),
-		reraise=True,
-	)
 	async def check_permission_async(
-		self, resource_urn: str, action: str, actor_id: Optional[str] = None, context: Optional[dict[str, Any]] = None
+		self, resource_urn: str, action: str, actor_id: str | None = None, context: dict[str, Any] | None = None
 	) -> bool:
 		"""
 		Non-blocking (Async/Await) permission check.
@@ -193,8 +208,7 @@ class AmbyteClient:
 		}
 
 		try:
-			response = await self._async_client.post('/v1/check', json=payload)
-			response.raise_for_status()
+			response = await self._send_check_request_async(payload)
 			data = response.json()
 			return data.get('result') == 'ALLOW'
 
@@ -205,11 +219,11 @@ class AmbyteClient:
 	# AUDIT LOGGING
 	# ==========================================================================
 
-	def log_access(self, resource_urn: str, action: str, allowed: bool, actor_id: Optional[str] = None):
+	def log_access(self, resource_urn: str, action: str, allowed: bool, actor_id: str | None = None):
 		"""
 		Fire-and-forget audit log.
 		In a real implementation, this should push to a background queue
-		to avoid blocking the main thread. For MVP, we send simple HTTP.
+		to avoid blocking the main thread. For MVP, we send simple HTTP. # TODO
 		"""
 		if self.settings.mode == AmbyteMode.OFF:
 			return
@@ -223,7 +237,7 @@ class AmbyteClient:
 		}
 
 		# MVP: Fire synchronous call inside a try/except to never crash execution
-		# Future: Move to BackgroundTask or Producer/Consumer Queue
+		# Future: Move to BackgroundTask or Producer/Consumer Queue # TODO
 		try:
 			self._client.post('/v1/audit', json=payload)
 		except Exception as e:

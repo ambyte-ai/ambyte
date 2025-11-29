@@ -177,7 +177,7 @@ class Obligation(AmbyteBaseModel):
 
 	# We use Optional fields to represent the 'OneOf'.
 	# In Pydantic validation, you might want to enforce that exactly one is set,
-	# but for simplicity we keep them optional here.
+	# but for simplicity we keep them optional here. # TODO
 	retention: RetentionRule | None = None
 	geofencing: GeofencingRule | None = None
 	purpose: PurposeRestriction | None = None

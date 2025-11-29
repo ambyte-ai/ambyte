@@ -1,7 +1,7 @@
 import logging
 import uuid
 from contextvars import ContextVar, Token
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
 	from ambyte_schemas.models.common import Actor, ActorType
@@ -30,21 +30,21 @@ logger = logging.getLogger('ambyte.context')
 # These store state local to the current Task/Thread request
 # ==============================================================================
 
-_current_actor: ContextVar[Optional[Actor]] = ContextVar('ambyte_actor', default=None)
-_current_run_id: ContextVar[Optional[str]] = ContextVar('ambyte_run_id', default=None)
-_extra_context: ContextVar[Optional[dict[str, Any]]] = ContextVar('ambyte_extras', default=None)
+_current_actor: ContextVar[Actor | None] = ContextVar('ambyte_actor', default=None)
+_current_run_id: ContextVar[str | None] = ContextVar('ambyte_run_id', default=None)
+_extra_context: ContextVar[dict[str, Any] | None] = ContextVar('ambyte_extras', default=None)
 
 # ==============================================================================
 # Getters
 # ==============================================================================
 
 
-def get_current_actor() -> Optional[Actor]:
+def get_current_actor() -> Actor | None:
 	"""Returns the actor currently active in this context."""
 	return _current_actor.get()
 
 
-def get_current_run_id() -> Optional[str]:
+def get_current_run_id() -> str | None:
 	"""
 	Returns the current Run ID.
 	If none was explicitly set, one is NOT generated here to avoid side effects.
@@ -64,7 +64,7 @@ def get_extra_context() -> dict[str, Any]:
 # ==============================================================================
 
 
-def _sync_otel_span(actor: Optional[Actor], run_id: Optional[str]):
+def _sync_otel_span(actor: Actor | None, run_id: str | None):
 	"""
 	If OpenTelemetry is installed and a Span is active, inject Ambyte metadata.
 	This links 'Policy Checks' to 'Datadog Traces'.
@@ -105,18 +105,16 @@ class AmbyteContext:
 	        ambyte.guard(...)
 	"""  # noqa: E101
 
-	def __init__(
-		self, actor: Optional[Actor] = None, run_id: Optional[str] = None, extras: Optional[dict[str, Any]] = None
-	):
+	def __init__(self, actor: Actor | None = None, run_id: str | None = None, extras: dict[str, Any] | None = None):
 		self.actor = actor
 		self.run_id = run_id
 		self.extras = extras
 
 		# Tokens allow us to reset the context var to its previous state
 		# (vital for nested contexts)
-		self._actor_token: Optional[Token] = None
-		self._run_id_token: Optional[Token] = None
-		self._extras_token: Optional[Token] = None
+		self._actor_token: Token | None = None
+		self._run_id_token: Token | None = None
+		self._extras_token: Token | None = None
 
 	def __enter__(self):
 		# 1. Set Actor
@@ -154,7 +152,7 @@ class AmbyteContext:
 # ==============================================================================
 
 
-def context(actor: Optional[Actor] = None, run_id: Optional[str] = None, **kwargs) -> AmbyteContext:
+def context(actor: Actor | None = None, run_id: str | None = None, **kwargs) -> AmbyteContext:
 	"""
 	Helper function to create a context manager.
 	Allows passing extras as kwargs.

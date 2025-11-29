@@ -89,7 +89,7 @@ class PolicyCompilerService:
 		# For a production system, we'd add PrivacySolver to the Engine.
 		# Here, we look at the raw inputs via metadata or passed obligations if needed.
 		# *Simplification for MVP*: We default to Pseudonymization if ANY rule asks for it.
-		# In a real scenario, this logic moves to ConflictResolutionEngine.
+		# In a real scenario, this logic moves to ConflictResolutionEngine. #TODO
 		method = PrivacyMethod.PSEUDONYMIZATION  # Default safe
 
 		# Determine strictness based on enforcement level of winning constraints

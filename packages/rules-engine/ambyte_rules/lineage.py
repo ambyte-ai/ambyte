@@ -16,7 +16,7 @@ class LineageGraph:
 		self.graph = nx.DiGraph()
 
 		# Local cache of node attributes (e.g. {'urn:1': {'risk': 3}})
-		# In a real system, this would be fetched from the Control Plane DB.
+		# In a real system, this would be fetched from the Control Plane DB. # TODO
 		self.node_metadata: dict[str, dict[str, Any]] = {}
 
 	def add_event(self, event: LineageEvent):

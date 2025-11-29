@@ -1,9 +1,11 @@
 import inspect
 import logging
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Union
+from typing import Any, Union
 
 from ambyte.client import get_client
+from ambyte.core.decision import get_decision_engine
 from ambyte.exceptions import AmbyteAccessDenied
 
 logger = logging.getLogger('ambyte.decorators')
@@ -58,7 +60,7 @@ def guard(resource: ResourceResolver, action: str = 'use', context: dict[str, An
 	"""  # noqa: E101
 
 	def decorator(func: Callable):
-		client = get_client()
+		engine = get_decision_engine()
 
 		# ----------------------------------------------------------------------
 		# ASYNC WRAPPER
@@ -70,7 +72,7 @@ def guard(resource: ResourceResolver, action: str = 'use', context: dict[str, An
 				urn = _resolve_resource(resource, args, kwargs)
 
 				# Non-blocking check
-				allowed = await client.check_permission_async(resource_urn=urn, action=action, context=context)
+				allowed = await engine.check_access_async(resource_urn=urn, action=action, context=context)
 
 				if not allowed:
 					msg = f"Ambyte Policy blocked action '{action}' on '{urn}'"
@@ -92,7 +94,7 @@ def guard(resource: ResourceResolver, action: str = 'use', context: dict[str, An
 				urn = _resolve_resource(resource, args, kwargs)
 
 				# Blocking check
-				allowed = client.check_permission(resource_urn=urn, action=action, context=context)
+				allowed = engine.check_access(resource_urn=urn, action=action, context=context)
 
 				if not allowed:
 					msg = f"Ambyte Policy blocked action '{action}' on '{urn}'"
@@ -113,6 +115,8 @@ def audit(resource: ResourceResolver, action: str = 'use'):
 
 	Does NOT block execution. It simply logs that the action occurred
 	(after successful execution). Useful for monitoring without enforcement risk.
+	Note: We still use the Client directly for logging, as the DecisionEngine
+	is strictly for *decisions* (checking if allowed), not *logging* (recording execution).
 	"""
 
 	def decorator(func: Callable):

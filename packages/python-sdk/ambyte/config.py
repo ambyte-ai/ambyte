@@ -1,8 +1,8 @@
 from enum import StrEnum
 from functools import lru_cache
-from typing import Annotated, Optional
+from typing import Annotated, Any
 
-from pydantic import Field, HttpUrl, SecretStr
+from pydantic import Field, HttpUrl, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,7 +34,7 @@ class AmbyteSettings(BaseSettings):
 	# Connectivity
 	# ==========================================================================
 	api_key: Annotated[
-		Optional[SecretStr],
+		SecretStr | None,
 		Field(
 			default=None,
 			description='Authentication token for the Ambyte Control Plane.',
@@ -90,10 +90,18 @@ class AmbyteSettings(BaseSettings):
 	# ==========================================================================
 	# Local Mode Specifics
 	# ==========================================================================
-	local_policy_path: Optional[str] = Field(
+	local_policy_path: str | None = Field(
 		default=None,
 		description='Path to a JSON policy bundle when running in LOCAL mode.',
 	)
+
+	@field_validator('mode', mode='before')
+	@classmethod
+	def _case_insensitive_mode(cls, v: Any) -> Any:
+		"""Ensure mode is upper-cased for enum validation."""
+		if isinstance(v, str):
+			return v.upper()
+		return v
 
 	@property
 	def is_remote(self) -> bool:
