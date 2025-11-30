@@ -7,7 +7,8 @@ from ambyte_rules.models import (
 	EffectiveRetention,
 	ResolvedPolicy,
 )
-from policy_compiler.generators.iam_builder import IamPolicyBuilder
+
+from apps.policy_compiler.ambyte_compiler.generators.iam_builder import IamPolicyBuilder
 
 # ==============================================================================
 # HELPERS

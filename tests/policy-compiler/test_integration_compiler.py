@@ -13,8 +13,8 @@ from ambyte_schemas.models.obligation import (
 	SourceProvenance,
 )
 
-from apps.policy_compiler.diff_engine.service import SemanticDiffEngine
-from apps.policy_compiler.service import PolicyCompilerService
+from apps.policy_compiler.ambyte_compiler.diff_engine.service import SemanticDiffEngine
+from apps.policy_compiler.ambyte_compiler.service import PolicyCompilerService
 
 # ------------------------------------------------------------------------------
 # Fixtures & Helpers

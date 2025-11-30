@@ -17,6 +17,9 @@ dependencies = [
     "ambyte-control-plane",
     "ambyte-ingest",
     "ambyte-compiler",
+    "ambyte-cli",
+    "ambyte-audit",
+    "ambyte-rules",
 ]
 
 [tool.uv.workspace]
@@ -39,6 +42,9 @@ ambyte-connectors = { workspace = true }
 ambyte-control-plane = { workspace = true }
 ambyte-ingest = { workspace = true }
 ambyte-compiler = { workspace = true }
+ambyte-cli = { workspace = true }
+ambyte-audit = { workspace = true }
+ambyte-rules = { workspace = true }
 
 [tool.ruff]
 line-length = 120

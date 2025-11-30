@@ -1,5 +1,6 @@
 from ambyte_schemas.models.obligation import PrivacyMethod
-from policy_compiler.generators.snowflake_sql import SnowflakeGenerator
+
+from apps.policy_compiler.ambyte_compiler.generators.snowflake_sql import SnowflakeGenerator
 
 
 def test_snowflake_generator_hash(policy_library_path):

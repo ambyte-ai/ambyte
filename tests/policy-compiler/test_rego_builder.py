@@ -7,7 +7,8 @@ from ambyte_rules.models import (
 	EffectiveRetention,
 	ResolvedPolicy,
 )
-from policy_compiler.generators.rego_builder import RegoDataBuilder
+
+from apps.policy_compiler.ambyte_compiler.generators.rego_builder import RegoDataBuilder
 
 # ==============================================================================
 # HELPERS

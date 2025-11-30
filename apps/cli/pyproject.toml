@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-covenant = "ambyte_cli.main:app"
+ambyte = "ambyte_cli.main:app"
 
 [build-system]
 requires = ["hatchling"]

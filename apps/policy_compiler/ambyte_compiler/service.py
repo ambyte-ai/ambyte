@@ -5,9 +5,9 @@ from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ResolvedPolicy
 from ambyte_schemas.models.obligation import Obligation, PrivacyMethod
 
-from apps.policy_compiler.generators.iam_builder import IamPolicyBuilder
-from apps.policy_compiler.generators.rego_builder import RegoDataBuilder
-from apps.policy_compiler.generators.snowflake_sql import SnowflakeGenerator
+from apps.policy_compiler.ambyte_compiler.generators.iam_builder import IamPolicyBuilder
+from apps.policy_compiler.ambyte_compiler.generators.rego_builder import RegoDataBuilder
+from apps.policy_compiler.ambyte_compiler.generators.snowflake_sql import SnowflakeGenerator
 
 TargetPlatform = Literal['snowflake', 'opa', 'aws_iam']
 

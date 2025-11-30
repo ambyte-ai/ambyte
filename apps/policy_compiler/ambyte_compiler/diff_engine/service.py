@@ -1,6 +1,6 @@
 from ambyte_rules.models import EffectiveAiRules, EffectiveGeofencing, EffectiveRetention, ResolvedPolicy
 
-from apps.policy_compiler.diff_engine.models import ChangeImpact, ChangeType, DiffItem, PolicyDiffReport
+from apps.policy_compiler.ambyte_compiler.diff_engine.models import ChangeImpact, ChangeType, DiffItem, PolicyDiffReport
 
 
 class SemanticDiffEngine:
