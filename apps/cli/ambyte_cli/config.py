@@ -6,7 +6,6 @@ and handles loading/saving logic.
 import sys
 from enum import StrEnum
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel, Field, HttpUrl, ValidationError
@@ -37,8 +36,8 @@ class CloudConfig(BaseModel):
 	"""
 
 	url: HttpUrl = Field(default=HttpUrl('https://api.ambyte.ai'), description='API Base URL')
-	organization_id: Optional[str] = Field(default=None, description='The Org ID this workspace belongs to.')
-	project_id: Optional[str] = Field(default=None, description='The specific Project ID.')
+	organization_id: str | None = Field(default=None, description='The Org ID this workspace belongs to.')
+	project_id: str | None = Field(default=None, description='The specific Project ID.')
 
 
 class AmbyteConfig(BaseModel):
@@ -109,7 +108,7 @@ def load_config() -> AmbyteConfig:
 			# Should be caught by get_workspace_root usually, but double check
 			raise FileNotFoundError(f'Config file missing at {config_path}')
 
-		with open(config_path, 'r', encoding='utf-8') as f:
+		with open(config_path, encoding='utf-8') as f:
 			data = yaml.safe_load(f) or {}
 
 		return AmbyteConfig.model_validate(data)

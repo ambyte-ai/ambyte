@@ -1,7 +1,7 @@
 import re
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Type, TypeVar
+from typing import Any, TypeVar
 
 import yaml
 from ambyte_cli.config import AmbyteConfig
@@ -61,7 +61,7 @@ class ObligationLoader:
 
 	def _load_file(self, path: Path) -> Obligation:
 		"""Reads file from disk and parses it."""
-		with open(path, 'r', encoding='utf-8') as f:
+		with open(path, encoding='utf-8') as f:
 			try:
 				raw = yaml.safe_load(f)
 			except yaml.YAMLError as e:
@@ -155,7 +155,7 @@ class ObligationLoader:
 
 		raise PolicyLoaderError(f"Unknown constraint type: '{c_type}'")
 
-	def _resolve_enum(self, enum_cls: Type[T], value: str | int) -> T:
+	def _resolve_enum(self, enum_cls: type[T], value: str | int) -> T:
 		if isinstance(value, int):
 			try:
 				return enum_cls(value)

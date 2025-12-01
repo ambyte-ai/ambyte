@@ -1,0 +1,41 @@
+# Ambyte Role Mapping Configuration
+# Maps high-level Data Purposes (from Ambyte Ontology) to concrete Snowflake Roles.
+# This allows the Policy Compiler to translate "No Marketing Use" into "BLOCK ROLE MKT_ANALYST".
+
+platform: snowflake
+
+mappings:
+  - purpose: "MARKETING"
+    associated_roles:
+      - "MKT_ANALYST"
+      - "CAMPAIGN_MANAGER"
+      - "EMAIL_MARKETING_SVC"
+    
+  - purpose: "ANALYTICS"
+    associated_roles:
+      - "DATA_SCIENTIST"
+      - "BI_ANALYST"
+      - "PRODUCT_MANAGER"
+
+  - purpose: "AI_TRAINING"
+    associated_roles:
+      - "ML_ENGINEER"
+      - "SAGEMAKER_EXECUTION_ROLE"
+
+  - purpose: "HR_ADMIN"
+    associated_roles:
+      - "HR_MANAGER"
+      - "RECRUITER"
+
+  - purpose: "DEBUGGING"
+    associated_roles:
+      - "DEVELOPER"
+      - "QA_ENGINEER"
+
+# Safety Defaults
+default_admin_roles:
+  - "ACCOUNTADMIN"
+  - "SECURITYADMIN"
+  - "AMBYTE_PLATFORM_ADMIN"
+
+standard_pii_tag: "AMBYTE_GOVERNANCE.TAGS.PII_CATEGORY"

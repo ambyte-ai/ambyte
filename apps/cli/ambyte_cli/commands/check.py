@@ -3,7 +3,7 @@ Debug commands for simulating policy enforcement.
 """
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 import typer
 from ambyte_cli.config import load_config
@@ -150,7 +150,7 @@ def _explain_specific_action(policy: ResolvedPolicy, action: str, context: dict[
 		return
 
 	# If Denied, find the specific trace
-	trace: Optional[ConflictTrace] = None
+	trace: ConflictTrace | None = None
 
 	# Heuristic matching of failure reason text to policy sections
 	# (In a real system, the Simulator would return the Trace object directly,
