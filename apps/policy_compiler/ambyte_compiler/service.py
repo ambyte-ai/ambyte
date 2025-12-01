@@ -3,7 +3,7 @@ from typing import Literal
 
 from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ResolvedPolicy
-from ambyte_schemas.models.obligation import Obligation, PrivacyMethod
+from ambyte_schemas.models.obligation import Obligation
 
 from apps.policy_compiler.ambyte_compiler.generators.iam_builder import IamPolicyBuilder
 from apps.policy_compiler.ambyte_compiler.generators.rego_builder import RegoDataBuilder
@@ -70,38 +70,59 @@ class PolicyCompilerService:
 			return self._compile_opa(effective_policy)
 		if target == 'aws_iam':
 			return self._compile_iam(effective_policy, context)
-		else:
-			raise ValueError(f'Unsupported compilation target: {target}')
+
+		raise ValueError(f'Unsupported compilation target: {target}')
 
 	def _compile_snowflake(self, policy: ResolvedPolicy, context: dict) -> str:
+		"""
+		Generates Snowflake SQL for both Column-level (Masking) and Row-level (Access) security.
+		"""
 		if not self.snowflake_gen:
 			raise RuntimeError('SnowflakeGenerator not initialized. Provide templates_path.')
 
 		# Extract context
 		input_type = str(context.get('input_type', 'VARCHAR'))
+		ref_column = str(context.get('ref_column', 'ID'))  # Used for Row Access Policy binding
+
 		allowed_roles = context.get('allowed_roles', [])
 		if isinstance(allowed_roles, str):
 			allowed_roles = [allowed_roles]
 
-		# Determine Privacy Method
-		# The Rules Engine doesn't have a dedicated "PrivacySolver" yet (it's often simple logic),
-		# so we check obligations attached to the policy or pass raw logic.
-		# For a production system, we'd add PrivacySolver to the Engine.
-		# Here, we look at the raw inputs via metadata or passed obligations if needed.
-		# *Simplification for MVP*: We default to Pseudonymization if ANY rule asks for it.
-		# In a real scenario, this logic moves to ConflictResolutionEngine. #TODO
-		method = PrivacyMethod.PSEUDONYMIZATION  # Default safe
+		sql_statements = []
 
-		# Determine strictness based on enforcement level of winning constraints
-		# (This logic would likely expand in Phase 3)
+		# 1. Privacy / Masking Policy (Column Level)
+		# Resolved via PrivacySolver (e.g. Differential Privacy vs Pseudonymization)
+		if policy.privacy:
+			masking_sql = self.snowflake_gen.generate_masking_policy(
+				policy_name=f'ambyte_mask_{policy.resource_urn.split(":")[-1]}',
+				input_type=input_type,
+				method=policy.privacy.method,
+				allowed_roles=allowed_roles,  # type: ignore
+				comment=f'Source: {policy.privacy.reason.winning_source_id}. Method: {policy.privacy.method.name}',
+			)
+			sql_statements.append(masking_sql)
 
-		return self.snowflake_gen.generate_masking_policy(
-			policy_name=f'ambyte_mask_{policy.resource_urn.split(":")[-1]}',
-			input_type=input_type,
-			method=method,
-			allowed_roles=allowed_roles,  # type: ignore
-			comment=f'Generated for {policy.resource_urn}. Obligations: {len(policy.contributing_obligation_ids)}',
-		)
+		# 2. Purpose / Row Access Policy (Row Level)
+		# Resolved via PurposeSolver (e.g. Blocking Marketing use)
+		if policy.purpose:
+			# Convert sets to sorted lists for deterministic SQL generation
+			denied_list = sorted(policy.purpose.denied_purposes)
+
+			rap_sql = self.snowflake_gen.generate_row_access_policy(
+				policy_name=f'ambyte_row_access_{policy.resource_urn.split(":")[-1]}',
+				input_type=input_type,
+				ref_column=ref_column,
+				allowed_roles=allowed_roles,  # type: ignore
+				denied_roles=[],  # Can be mapped from denied purposes if needed
+				denied_purposes=denied_list,
+				comment=f'Source: {policy.purpose.reason.winning_source_id}. Denied Purposes: {len(denied_list)}',
+			)
+			sql_statements.append(rap_sql)
+
+		if not sql_statements:
+			return f'-- No active Privacy or Purpose constraints found for {policy.resource_urn}'
+
+		return '\n\n'.join(sql_statements)
 
 	def _compile_opa(self, policy: ResolvedPolicy) -> dict:
 		# OPA expects a JSON bundle

@@ -416,3 +416,39 @@ def _print_resolved_pretty(policy):
 		console.print(table)
 	else:
 		console.print('[dim]No AI rules active.[/dim]')
+
+	console.print('')
+
+	# 4. Purpose Restrictions
+	if policy.purpose:
+		table = Table(title='Purpose Restrictions', show_header=False, box=None)
+
+		allowed = ', '.join(sorted(policy.purpose.allowed_purposes)) or 'Any (Open)'
+		denied = ', '.join(sorted(policy.purpose.denied_purposes)) or 'None'
+
+		table.add_row('Allowed', f'[green]{allowed}[/green]')
+		table.add_row('Denied', f'[red]{denied}[/red]')
+		table.add_row(
+			'[dim]Winner[/dim]',
+			f'[dim]{policy.purpose.reason.winning_source_id}[/dim]',
+		)
+		console.print(table)
+	else:
+		console.print('[dim]No Purpose rules active.[/dim]')
+
+	console.print('')
+
+	# 5. Privacy Enhancements
+	if policy.privacy:
+		table = Table(title='Privacy Enhancements', show_header=False, box=None)
+
+		table.add_row('Method', f'[bold magenta]{policy.privacy.method.name}[/bold magenta]')
+
+		if policy.privacy.parameters:
+			params_str = ', '.join(f'{k}={v}' for k, v in policy.privacy.parameters.items())
+			table.add_row('Config', f'[cyan]{params_str}[/cyan]')
+
+		table.add_row('[dim]Winner[/dim]', f'[dim]{policy.privacy.reason.winning_source_id}[/dim]')
+		console.print(table)
+	else:
+		console.print('[dim]No Privacy rules active.[/dim]')

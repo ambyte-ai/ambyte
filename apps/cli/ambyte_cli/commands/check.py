@@ -177,6 +177,14 @@ def _explain_specific_action(policy: ResolvedPolicy, action: str, context: dict[
 		elif region and policy.geofencing.allowed_regions and region not in policy.geofencing.allowed_regions:
 			trace = policy.geofencing.reason
 
+	# 3. Check Purpose Blockers
+	if not trace and policy.purpose:
+		purpose = str(context.get('purpose', '')).upper()
+		if purpose and purpose in policy.purpose.denied_purposes:
+			trace = policy.purpose.reason
+		elif purpose and policy.purpose.allowed_purposes and purpose not in policy.purpose.allowed_purposes:
+			trace = policy.purpose.reason
+
 	# 3. Render the Evidence
 	if trace:
 		_print_trace_evidence(trace, '⛔ BLOCKING SOURCE')
@@ -209,6 +217,14 @@ def _explain_general_policy(policy: ResolvedPolicy):
 	if policy.ai_rules:
 		t = policy.ai_rules.reason
 		table.add_row('AI/ML Usage', t.winning_source_id, t.description)
+
+	if policy.purpose:
+		t = policy.purpose.reason
+		table.add_row('Purpose Limit', t.winning_source_id, t.description)
+
+	if policy.privacy:
+		t = policy.privacy.reason
+		table.add_row('Privacy Method', t.winning_source_id, t.description)
 
 	console.print(table)
 
@@ -297,7 +313,33 @@ class PolicySimulator:
 						f"defined by '{geo.reason.winning_source_id}'.",
 					)
 
-		# 3. Retention Check (Primitive)
+		# 3. Purpose Check
+		if self.policy.purpose:
+			pur = self.policy.purpose
+			current_purpose = str(context.get('purpose', '')).upper()
+
+			if current_purpose:
+				if current_purpose in pur.denied_purposes:
+					return (
+						False,
+						f"Purpose '{current_purpose}' is forbidden by obligation '{pur.reason.winning_source_id}'.",
+					)
+
+				if pur.allowed_purposes and current_purpose not in pur.allowed_purposes:
+					return (
+						False,
+						f"Purpose '{current_purpose}' is not in the allowed list "
+						f"defined by '{pur.reason.winning_source_id}'.",
+					)
+
+		# 4. Privacy Check (Informational, usually doesn't block unless required)
+		if self.policy.privacy:
+			# If the action suggests reading raw data, we can flag it.
+			# For now, we allow it but append the privacy requirement to the reason.
+			method_name = self.policy.privacy.method.name
+			return True, f'Allowed, subject to privacy transformation: {method_name}'
+
+		# 5. Retention Check (Primitive)
 		# If action is "access" or "read", usually allowed unless expired.
 		# But for CLI check, we don't know the data age easily.
 		# We assume ALLOW unless specifically blocked above. # TODO
@@ -356,6 +398,26 @@ def _print_trace(policy: ResolvedPolicy, action: str, context: dict, final_reaso
 				geo_node.add(f'Region {region}: [green]Pass[/green]')
 		else:
 			geo_node.add('[dim]Region not provided in context, skipped check.[/dim]')
+
+	if policy.purpose:
+		pur_node = pol_node.add('Purpose')
+		purpose = context.get('purpose', 'Unknown').upper()
+		if purpose != 'UNKNOWN':
+			if purpose in policy.purpose.denied_purposes:
+				pur_node.add(
+					f'[red]Purpose {purpose} Blocked[/red] (Source: {policy.purpose.reason.winning_source_id})'
+				)
+			elif policy.purpose.allowed_purposes and purpose not in policy.purpose.allowed_purposes:
+				pur_node.add(
+					f'[red]Purpose {purpose} Not Whitelisted[/red] (Source: {policy.purpose.reason.winning_source_id})'
+				)
+			else:
+				pur_node.add(f'Purpose {purpose}: [green]Pass[/green]')
+		else:
+			pur_node.add('[dim]Purpose not provided in context.[/dim]')
+
+	if policy.privacy:
+		pol_node.add(f'Privacy: [magenta]{policy.privacy.method.name}[/magenta] enforced.')
 
 	console.print('\n')
 	console.print(tree)

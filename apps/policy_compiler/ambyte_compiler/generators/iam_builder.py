@@ -107,6 +107,54 @@ class IamPolicyBuilder:
 				}
 			)
 
+		# 4. Purpose Restrictions (ABAC)
+		# We rely on Principal Tags (aws:PrincipalTag/ambyte:purpose) to map intent.
+		if policy.purpose:
+			# A. Block Explicitly Denied Purposes
+			if policy.purpose.denied_purposes:
+				statements.append(
+					{
+						'Sid': 'AmbyteBlockDeniedPurposes',
+						'Effect': 'Deny',
+						'Action': '*',
+						'Resource': resource_arn,
+						'Condition': {
+							'StringEquals': {'aws:PrincipalTag/ambyte:purpose': sorted(policy.purpose.denied_purposes)}
+						},
+					}
+				)
+
+			# B. Enforce Allowed Purposes (Whitelist)
+			# If the user does not have the correct tag, or has a wrong tag, they are blocked.
+			if policy.purpose.allowed_purposes:
+				statements.append(
+					{
+						'Sid': 'AmbyteEnforceAllowedPurposes',
+						'Effect': 'Deny',
+						'Action': '*',
+						'Resource': resource_arn,
+						'Condition': {
+							'StringNotEquals': {
+								'aws:PrincipalTag/ambyte:purpose': sorted(policy.purpose.allowed_purposes)
+							}
+						},
+					}
+				)
+
+		# 5. Privacy Requirements (Encryption Enforcement)
+		# If active privacy rules exist (e.g. Masking), we enforce TLS so raw data
+		# cannot be sniffed before it reaches the compute layer that performs the masking.
+		if policy.privacy:
+			statements.append(
+				{
+					'Sid': 'AmbyteEnforcePrivacyEncryption',
+					'Effect': 'Deny',
+					'Action': '*',
+					'Resource': resource_arn,
+					'Condition': {'Bool': {'aws:SecureTransport': 'false'}},
+				}
+			)
+
 		policy_doc = {'Version': '2012-10-17', 'Statement': statements}
 
 		return json.dumps(policy_doc, indent=4)

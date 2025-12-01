@@ -1,6 +1,20 @@
-from ambyte_rules.models import EffectiveAiRules, EffectiveGeofencing, EffectiveRetention, ResolvedPolicy
+from typing import Any
 
-from apps.policy_compiler.ambyte_compiler.diff_engine.models import ChangeImpact, ChangeType, DiffItem, PolicyDiffReport
+from ambyte_rules.models import (
+	EffectiveAiRules,
+	EffectiveGeofencing,
+	EffectivePrivacy,
+	EffectivePurpose,
+	EffectiveRetention,
+	ResolvedPolicy,
+)
+
+from apps.policy_compiler.ambyte_compiler.diff_engine.models import (
+	ChangeImpact,
+	ChangeType,
+	DiffItem,
+	PolicyDiffReport,
+)
 
 
 class SemanticDiffEngine:
@@ -23,6 +37,12 @@ class SemanticDiffEngine:
 
 		# 3. Diff AI Rules
 		self._diff_ai(old.ai_rules, new.ai_rules, report)
+
+		# 4. Diff Purpose Restrictions
+		self._diff_purpose(old.purpose, new.purpose, report)
+
+		# 5. Diff Privacy Methods
+		self._diff_privacy(old.privacy, new.privacy, report)
 
 		return report
 
@@ -209,3 +229,230 @@ class SemanticDiffEngine:
 						description='Attribution text content updated.',
 					)
 				)
+
+	def _diff_purpose(self, old: EffectivePurpose | None, new: EffectivePurpose | None, report: PolicyDiffReport):
+		if old == new:
+			return
+
+		# Case: Added Purpose Restrictions (Was open, now restricted) -> Restrictive
+		if not old and new:
+			report.changes.append(
+				DiffItem(
+					category='Purpose',
+					field='rule',
+					old_value='Open',
+					new_value='Restricted',
+					change_type=ChangeType.ADDED,
+					impact=ChangeImpact.RESTRICTIVE,
+					description='Purpose limitation rules applied.',
+				)
+			)
+			return
+
+		# Case: Removed Purpose Restrictions (Was restricted, now open) -> Permissive (High Risk)
+		if old and not new:
+			report.changes.append(
+				DiffItem(
+					category='Purpose',
+					field='rule',
+					old_value='Restricted',
+					new_value='Open',
+					change_type=ChangeType.REMOVED,
+					impact=ChangeImpact.PERMISSIVE,
+					description='Purpose limitation removed. Data can be used for any purpose.',
+				)
+			)
+			return
+
+		if old and new:
+			# 1. Allowed Purposes (Intersection Logic)
+			# Adding an allowed purpose expands the intersection -> Permissive
+			added_allowed = new.allowed_purposes - old.allowed_purposes
+			if added_allowed:
+				report.changes.append(
+					DiffItem(
+						category='Purpose',
+						field='allowed_purposes',
+						old_value=None,
+						new_value=list(added_allowed),
+						change_type=ChangeType.MODIFIED,
+						impact=ChangeImpact.PERMISSIVE,
+						description=f'Allowed purposes expanded: {", ".join(added_allowed)}',
+					)
+				)
+
+			# Removing an allowed purpose shrinks intersection -> Restrictive
+			removed_allowed = old.allowed_purposes - new.allowed_purposes
+			if removed_allowed:
+				report.changes.append(
+					DiffItem(
+						category='Purpose',
+						field='allowed_purposes',
+						old_value=list(removed_allowed),
+						new_value=None,
+						change_type=ChangeType.MODIFIED,
+						impact=ChangeImpact.RESTRICTIVE,
+						description=f'Allowed purposes reduced: {", ".join(removed_allowed)}',
+					)
+				)
+
+			# 2. Denied Purposes (Union Logic)
+			# Adding a denied purpose -> Restrictive
+			added_denied = new.denied_purposes - old.denied_purposes
+			if added_denied:
+				report.changes.append(
+					DiffItem(
+						category='Purpose',
+						field='denied_purposes',
+						old_value=None,
+						new_value=list(added_denied),
+						change_type=ChangeType.MODIFIED,
+						impact=ChangeImpact.RESTRICTIVE,
+						description=f'Denied purposes added: {", ".join(added_denied)}',
+					)
+				)
+
+			# Removing a denied purpose -> Permissive
+			removed_denied = old.denied_purposes - new.denied_purposes
+			if removed_denied:
+				report.changes.append(
+					DiffItem(
+						category='Purpose',
+						field='denied_purposes',
+						old_value=list(removed_denied),
+						new_value=None,
+						change_type=ChangeType.MODIFIED,
+						impact=ChangeImpact.PERMISSIVE,
+						description=f'Denied purposes removed: {", ".join(removed_denied)}',
+					)
+				)
+
+	def _diff_privacy(self, old: EffectivePrivacy | None, new: EffectivePrivacy | None, report: PolicyDiffReport):
+		if old == new:
+			return
+
+		# Added Privacy Rule -> Restrictive
+		if not old and new:
+			report.changes.append(
+				DiffItem(
+					category='Privacy',
+					field='rule',
+					old_value='None',
+					new_value=new.method.name,
+					change_type=ChangeType.ADDED,
+					impact=ChangeImpact.RESTRICTIVE,
+					description=f'Privacy method {new.method.name} applied.',
+				)
+			)
+			return
+
+		# Removed Privacy Rule -> Permissive (High Risk)
+		if old and not new:
+			report.changes.append(
+				DiffItem(
+					category='Privacy',
+					field='rule',
+					old_value=old.method.name,
+					new_value='None',
+					change_type=ChangeType.REMOVED,
+					impact=ChangeImpact.PERMISSIVE,
+					description=f'Privacy method {old.method.name} removed. Data is now raw/unmasked.',
+				)
+			)
+			return
+
+		if old and new:
+			# 1. Method Hierarchy Check
+			# Enum Value: Unspecified(0) < Pseudonymization(1) < Anonymization(2) < Differential Privacy(3)
+			if old.method != new.method:
+				if new.method.value > old.method.value:
+					impact = ChangeImpact.RESTRICTIVE
+					desc = 'Privacy method upgraded (stronger protection).'
+				else:
+					impact = ChangeImpact.PERMISSIVE
+					desc = 'Privacy method downgraded (weaker protection).'
+
+				report.changes.append(
+					DiffItem(
+						category='Privacy',
+						field='method',
+						old_value=old.method.name,
+						new_value=new.method.name,
+						change_type=ChangeType.MODIFIED,
+						impact=impact,
+						description=f'{desc} {old.method.name} -> {new.method.name}.',
+					)
+				)
+
+			# 2. Parameter Check (Epsilon, K-Anonymity)
+			# We assume dictionaries are comparable strings for standard diff,
+			# but we apply specific logic for known numeric params.
+			if old.parameters != new.parameters:
+				# Epsilon Check (Differential Privacy)
+				self._diff_numeric_param(
+					'epsilon',
+					old.parameters,
+					new.parameters,
+					report,
+					lower_is_stricter=True,  # Lower budget = More noise = Stricter
+				)
+
+				# K-Anonymity Check
+				self._diff_numeric_param(
+					'k',
+					old.parameters,
+					new.parameters,
+					report,
+					lower_is_stricter=False,  # Higher k = larger groups = Stricter
+				)
+
+				# Generic fallback if params changed but not captured above
+				if 'epsilon' not in old.parameters and 'k' not in old.parameters:
+					# Just mark as neutral metadata change for now
+					report.changes.append(
+						DiffItem(
+							category='Privacy',
+							field='parameters',
+							old_value=old.parameters,
+							new_value=new.parameters,
+							change_type=ChangeType.MODIFIED,
+							impact=ChangeImpact.NEUTRAL,
+							description='Privacy configuration parameters updated.',
+						)
+					)
+
+	def _diff_numeric_param(
+		self,
+		key: str,
+		old_params: dict[str, Any],
+		new_params: dict[str, Any],
+		report: PolicyDiffReport,
+		lower_is_stricter: bool,
+	):
+		"""Helper to diff numeric privacy parameters like epsilon or k."""
+		if key in old_params and key in new_params:
+			try:
+				val_old = float(old_params[key])
+				val_new = float(new_params[key])
+
+				if val_old == val_new:
+					return
+
+				# Determine Impact
+				is_stricter = val_new < val_old if lower_is_stricter else val_new > val_old
+				impact = ChangeImpact.RESTRICTIVE if is_stricter else ChangeImpact.PERMISSIVE
+
+				report.changes.append(
+					DiffItem(
+						category='Privacy',
+						field=f'parameters.{key}',
+						old_value=val_old,
+						new_value=val_new,
+						change_type=ChangeType.MODIFIED,
+						impact=impact,
+						description=f'Privacy parameter {key} changed from {val_old} to {val_new}.',
+					)
+				)
+			except ValueError:
+				# If values aren't numbers, ignore numeric diff logic
+				pass

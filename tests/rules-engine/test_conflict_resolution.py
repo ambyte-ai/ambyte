@@ -7,6 +7,9 @@ from ambyte_schemas.models.obligation import (
 	EnforcementLevel,
 	GeofencingRule,
 	Obligation,
+	PrivacyEnhancementRule,
+	PrivacyMethod,
+	PurposeRestriction,
 	RetentionRule,
 	RetentionTrigger,
 	SourceProvenance,
@@ -178,6 +181,93 @@ def test_ai_attribution_aggregation():
 
 
 # ==============================================================================
+# PURPOSE SOLVER TESTS
+# ==============================================================================
+
+
+def test_purpose_intersection():
+	"""
+	Scenario:
+	- Rule 1: Allow [ANALYTICS, MARKETING, SALES]
+	- Rule 2: Allow [ANALYTICS, HR]
+	- Result: [ANALYTICS] (Intersection)
+	"""
+	ob1 = make_obligation('1', {'purpose': PurposeRestriction(allowed_purposes=['ANALYTICS', 'MARKETING', 'SALES'])})
+	ob2 = make_obligation('2', {'purpose': PurposeRestriction(allowed_purposes=['ANALYTICS', 'HR'])})
+
+	engine = ConflictResolutionEngine()
+	result = engine.resolve('urn:test', [ob1, ob2])
+
+	assert result.purpose is not None
+	assert result.purpose.allowed_purposes == {'ANALYTICS'}
+	assert result.purpose.reason.winning_obligation_id == '2'
+
+
+def test_purpose_denial_union():
+	"""
+	Scenario:
+	- Rule 1: Deny [SALES]
+	- Rule 2: Deny [HR]
+	- Result: Denied [SALES, HR]
+	"""
+	ob1 = make_obligation('1', {'purpose': PurposeRestriction(denied_purposes=['SALES'])})
+	ob2 = make_obligation('2', {'purpose': PurposeRestriction(denied_purposes=['HR'])})
+
+	engine = ConflictResolutionEngine()
+	result = engine.resolve('urn:test', [ob1, ob2])
+
+	assert result.purpose is not None
+	assert result.purpose.denied_purposes == {'SALES', 'HR'}
+
+
+# ==============================================================================
+# PRIVACY SOLVER TESTS
+# ==============================================================================
+
+
+def test_privacy_hierarchy():
+	"""
+	Scenario:
+	- Rule 1: PSEUDONYMIZATION
+	- Rule 2: ANONYMIZATION (Higher enum value)
+	- Result: ANONYMIZATION
+	"""
+	ob1 = make_obligation('1', {'privacy': PrivacyEnhancementRule(method=PrivacyMethod.PSEUDONYMIZATION)})
+	ob2 = make_obligation('2', {'privacy': PrivacyEnhancementRule(method=PrivacyMethod.ANONYMIZATION)})
+
+	engine = ConflictResolutionEngine()
+	result = engine.resolve('urn:test', [ob1, ob2])
+
+	assert result.privacy is not None
+	assert result.privacy.method == PrivacyMethod.ANONYMIZATION
+	assert result.privacy.reason.winning_obligation_id == '2'
+
+
+def test_privacy_parameter_merge():
+	"""
+	Scenario: Differential Privacy Epsilon
+	- Rule 1: Epsilon = 1.0
+	- Rule 2: Epsilon = 0.5 (Stricter/Lower)
+	- Result: Epsilon = 0.5
+	"""
+	ob1 = make_obligation(
+		'1',
+		{'privacy': PrivacyEnhancementRule(method=PrivacyMethod.DIFFERENTIAL_PRIVACY, parameters={'epsilon': '1.0'})},
+	)
+	ob2 = make_obligation(
+		'2',
+		{'privacy': PrivacyEnhancementRule(method=PrivacyMethod.DIFFERENTIAL_PRIVACY, parameters={'epsilon': '0.5'})},
+	)
+
+	engine = ConflictResolutionEngine()
+	result = engine.resolve('urn:test', [ob1, ob2])
+
+	assert result.privacy.method == PrivacyMethod.DIFFERENTIAL_PRIVACY
+	# Should pick minimum float value
+	assert result.privacy.parameters['epsilon'] == '0.5'
+
+
+# ==============================================================================
 # ENGINE INTEGRATION
 # ==============================================================================
 
@@ -193,9 +283,12 @@ def test_engine_mixed_obligations():
 	# 2. Geo Rule
 	ob_geo = make_obligation('geo', {'geofencing': GeofencingRule(allowed_regions=['US'])})
 
+	# 3. Purpose Rule (New)
+	ob_pur = make_obligation('pur', {'purpose': PurposeRestriction(denied_purposes=['SPAM'])})
+
 	engine = ConflictResolutionEngine()
 	# Pass mixed list
-	result = engine.resolve('urn:snowflake:test', [ob_ret, ob_geo])
+	result = engine.resolve('urn:snowflake:test', [ob_ret, ob_geo, ob_pur])
 
 	assert isinstance(result, ResolvedPolicy)
 	assert result.resource_urn == 'urn:snowflake:test'
@@ -208,9 +301,14 @@ def test_engine_mixed_obligations():
 	assert result.geofencing is not None
 	assert result.geofencing.allowed_regions == {'US'}
 
+	# Check Purpose
+	assert result.purpose is not None
+	assert 'SPAM' in result.purpose.denied_purposes
+
 	# Check AI (Should be None as no AI rules passed)
 	assert result.ai_rules is None
 
 	# Check Audit Trail
 	assert 'ret' in result.contributing_obligation_ids
 	assert 'geo' in result.contributing_obligation_ids
+	assert 'pur' in result.contributing_obligation_ids

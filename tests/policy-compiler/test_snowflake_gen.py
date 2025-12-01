@@ -25,7 +25,7 @@ def mock_template_dir(tmp_path):
             {% if method == 'HASH' %}ELSE SHA2(val){% else %}ELSE NULL{% endif %}
         END;
     COMMENT ON MASKING POLICY {{ policy_name }} IS '{{ comment }}';
-    """)
+    """)  # noqa: E501
 
 	# 2. Row Access Template
 	(sql_dir / 'row_access.sql').write_text("""

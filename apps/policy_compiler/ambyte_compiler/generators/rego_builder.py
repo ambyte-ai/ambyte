@@ -15,18 +15,16 @@ class RegoDataBuilder:
 	Output Structure Example:
 	{
 	    "resource_urn": "urn:snowflake:sales",
-	    "retention": {
-	        "max_days": 365,
-	        "indefinite": false
+	    "retention": { ... },
+	    "geofencing": { ... },
+	    "ai_rules": { ... },
+	    "purpose": {
+	        "allowed_purposes": ["ANALYTICS"],
+	        "denied_purposes": ["MARKETING"]
 	    },
-	    "geofencing": {
-	        "allowed_regions": ["US", "DE"],
-	        "blocked_regions": ["CN", "RU"],
-	        "global_ban": false
-	    },
-	    "ai_rules": {
-	        "training_allowed": false,
-	        "attribution_text": "Copyright 2024"
+	    "privacy": {
+	        "method": "DIFFERENTIAL_PRIVACY",
+	        "parameters": {"epsilon": "0.5"}
 	    }
 	}
 	"""  # noqa: E101
@@ -74,6 +72,22 @@ class RegoDataBuilder:
 				'attribution_required': policy.ai_rules.attribution_required,
 				'attribution_text': policy.ai_rules.attribution_text,
 				'reason_code': policy.ai_rules.reason.winning_source_id,
+			}
+
+		# 4. Purpose Data
+		if policy.purpose:
+			bundle['purpose'] = {
+				'allowed_purposes': sorted(policy.purpose.allowed_purposes),
+				'denied_purposes': sorted(policy.purpose.denied_purposes),
+				'reason_code': policy.purpose.reason.winning_source_id,
+			}
+
+		# 5. Privacy Data
+		if policy.privacy:
+			bundle['privacy'] = {
+				'method': policy.privacy.method.name,  # e.g. "PSEUDONYMIZATION"
+				'parameters': policy.privacy.parameters,
+				'reason_code': policy.privacy.reason.winning_source_id,
 			}
 
 		return bundle
