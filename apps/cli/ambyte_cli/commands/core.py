@@ -4,10 +4,12 @@ Core logic commands: resolve, build, and diff.
 
 import json
 import logging
+import shutil
+import subprocess
 from pathlib import Path
 
 import typer
-from ambyte_cli.config import TargetPlatform, load_config
+from ambyte_cli.config import AmbyteConfig, TargetPlatform, load_config
 from ambyte_cli.services.git import GitHistoryLoader
 from ambyte_cli.services.loader import ObligationLoader
 from ambyte_rules.engine import ConflictResolutionEngine
@@ -79,8 +81,6 @@ def build(clean: bool = typer.Option(False, '--clean', help='Clear existing arti
 
 		# 1. Clean previous build
 		if clean and out_dir.exists():
-			import shutil
-
 			shutil.rmtree(out_dir)
 			console.print(f'[dim]Cleaned {out_dir}[/dim]')
 
@@ -94,21 +94,14 @@ def build(clean: bool = typer.Option(False, '--clean', help='Clear existing arti
 				raise typer.Exit(0)
 
 		# 3. Initialize Compiler Service
-		# We need to find the templates directory relative to the package installation
-		# For dev mode, we look relative to the repo root logic in config
 		template_path = _get_template_path()
 		compiler = PolicyCompilerService(templates_path=template_path)
 
 		console.print(f'Building for targets: [cyan]{", ".join(config.targets)}[/cyan]')
 
-		# 4. Generate Artifacts
-		# For MVP, we assume a single 'global' resource context for the Local Target,
-		# or we iterate over a hypothetical 'resources.yaml' (omitted for brevity).
-		# We'll generate a wildcard policy for "urn:local:*" to prove the flow. # TODO
-
 		# --- Target: LOCAL (JSON for Python SDK) ---
 		if TargetPlatform.LOCAL in config.targets:
-			_build_local(compiler, obligations, out_dir)
+			_build_local(compiler, obligations, config)
 
 		# --- Target: SNOWFLAKE (SQL) ---
 		if TargetPlatform.SNOWFLAKE in config.targets:
@@ -117,6 +110,11 @@ def build(clean: bool = typer.Option(False, '--clean', help='Clear existing arti
 		# --- Target: OPA (Data Bundle) ---
 		if TargetPlatform.OPA in config.targets:
 			_build_opa(compiler, obligations, out_dir)
+
+		# --- Target: AWS IAM ---
+		if TargetPlatform.AWS_IAM in config.targets:
+			# Placeholder for IAM build loop # TODO
+			pass
 
 		console.print(f'\n✅ Build complete! Artifacts in [green]{out_dir}[/green]')
 
@@ -190,41 +188,45 @@ def diff(
 # ==============================================================================
 
 
-def _build_local(compiler: PolicyCompilerService, obligations: list, out_dir: Path):
-	"""Generates the policy.json used by ambyte-sdk in LOCAL mode."""
-	console.print('  • Generating [bold]Local JSON[/bold]...', end='')
+def _build_local(compiler: PolicyCompilerService, obligations: list, config: AmbyteConfig):
+	"""
+	Generates the local_policies.json Bundle used by ambyte-sdk in LOCAL mode.
+	"""
+	console.print('  • Generating [bold]Local Policy Bundle[/bold]...', end='')
 
-	# In Local Mode, we create a map of URN -> Decision
-	# Since we don't have a resource inventory in the CLI yet, we compile
-	# a "default" policy that applies to everything.
-	# The SDK's Local Engine expects: { "urn": { "action": "ALLOW" } }
+	out_dir = config.abs_artifacts_dir
 
-	# We resolve against a generic placeholder to get the constraints
-	policy = compiler.compile(  # noqa: F841
-		resource_urn='urn:local:default',
-		obligations=obligations,
-		target='opa',  # We reuse OPA dict output structure for now, or raw ResolvedPolicy
-	)
+	# 1. Identify Target Resources
+	# In a full implementation, we'd scan a resources.yaml inventory.
+	# For this MVP, we compile a default/wildcard policy that applies generally.
+	# The SDK DecisionEngine will look up 'urn:local:default' if no specific match found,
+	# or the user explicitly guards 'urn:local:default'. # TODO
+	target_urns = ['urn:local:default']
 
-	# Since the Compiler's 'compile' method returns different things based on target,
-	# let's use the rules engine directly for the raw object, then serialize.
-	# Ideally, we'd have a specific TargetPlatform.LOCAL in the compiler service too.
+	# 2. Gather Context
+	# Try to grab git hash for the artifact metadata
+	git_hash = None
+	try:
+		git_path = shutil.which('git')
+		# Simple attempt to get hash
+		git_hash = (
+			subprocess.check_output([git_path, 'rev-parse', '--short', 'HEAD'], stderr=subprocess.DEVNULL)  # noqa: S603
+			.decode()
+			.strip()
+		)
+	except Exception:
+		logger.warning('Failed to get git hash for build metadata.', exc_info=True)
+		pass
 
-	# Hack for MVP: We serialize the raw ResolvedPolicy # TODO
-	resolved = compiler.rules_engine.resolve('urn:local:default', obligations)  # noqa: F841
+	context = {'project_name': config.project_name, 'git_hash': git_hash}
 
-	# We construct the specific format expected by ambyte.core.decision._execute_local
-	# That simplistic engine expects: { "urn": { "action": "ALLOW" } }
-	# But a real policy is more complex.
-	# Let's write the FULL ResolvedPolicy to 'policy.json' and assume
-	# the SDK will evolve to read it (Phase 2). # TODO
+	# 3. Compiler Service Call (Target='local')
+	bundle_json = compiler.compile(resource_urn=target_urns, obligations=obligations, target='local', context=context)
 
-	# For now, let's just write the OPA bundle logic which is JSON compatible
-	bundle = compiler.compile('urn:local:default', obligations, 'opa')
-
-	out_file = out_dir / 'policy.json'
+	# 4. Write to Disk
+	out_file = out_dir / 'local_policies.json'
 	with open(out_file, 'w', encoding='utf-8') as f:
-		json.dump(bundle, f, indent=2, default=str)
+		f.write(str(bundle_json))
 
 	console.print(' [green]Done[/green]')
 

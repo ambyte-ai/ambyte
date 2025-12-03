@@ -5,11 +5,14 @@ from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ResolvedPolicy
 from ambyte_schemas.models.obligation import Obligation
 
-from apps.policy_compiler.ambyte_compiler.generators.iam_builder import IamPolicyBuilder
-from apps.policy_compiler.ambyte_compiler.generators.rego_builder import RegoDataBuilder
-from apps.policy_compiler.ambyte_compiler.generators.snowflake_sql import SnowflakeGenerator
+from apps.policy_compiler.ambyte_compiler.generators import (
+	IamPolicyBuilder,
+	LocalPythonGenerator,
+	RegoDataBuilder,
+	SnowflakeGenerator,
+)
 
-TargetPlatform = Literal['snowflake', 'opa', 'aws_iam']
+TargetPlatform = Literal['snowflake', 'opa', 'aws_iam', 'local']
 
 
 class PolicyCompilerService:
@@ -29,35 +32,45 @@ class PolicyCompilerService:
 		if templates_path:
 			self.snowflake_gen = SnowflakeGenerator(template_dir=templates_path)
 		else:
-			# Fallback for tests or non-SQL usage
 			self.snowflake_gen = None  # type: ignore
 
 		self.rego_gen = RegoDataBuilder()
 		self.iam_gen = IamPolicyBuilder()
 
+		self.local_gen = LocalPythonGenerator()
+
 	def compile(
 		self,
-		resource_urn: str,
+		resource_urn: str | list[str],
 		obligations: list[Obligation],
 		target: TargetPlatform,
-		# Context args for specific generators
 		context: dict[str, str | list[str]] | None = None,
 	) -> str | dict:
 		"""
-		Compiles a list of obligations into an executable artifact for a specific target.
+		Compiles obligations into an executable artifact for a specific target.
 
 		Args:
-		resource_urn: The ID of the data/model being protected.
-		obligations: List of all applicable legal/contractual rules.
-		target: The system we are generating code for ('snowflake', 'opa', 'aws_iam').
-		context: Extra parameters needed for generation (e.g., 'input_type' for SQL).
+			resource_urn: The ID(s) of the resource to compile for.
+					Pass a List[str] only if target='local' (Bulk Compilation).
+			obligations: List of all applicable legal/contractual rules.
+			target: The system we are generating code for.
+			context: Extra parameters (e.g. 'project_name', 'git_hash', 'input_type').
 
 		Returns:
-		str: SQL or JSON string (for Snowflake/IAM).
-		dict: JSON object (for OPA data bundle).
+			str: SQL/JSON string (Snowflake, IAM, Local).
+			dict: JSON object (OPA data bundle).
 		"""
 		if context is None:
 			context = {}
+
+		# --- Target: LOCAL (Bulk Python Artifact) ---
+		if target == 'local':
+			return self._compile_local(resource_urn, obligations, context)
+
+		# --- Single Resource Targets ---
+		# For non-local targets, we enforce single URN processing for now. # TODO
+		if isinstance(resource_urn, list):
+			raise ValueError(f"Target '{target}' does not support bulk compilation. Pass a single URN.")
 
 		# Step 1: Resolve Conflicts
 		# This reduces 50 conflicting rules into 1 mathematical truth.
@@ -73,10 +86,30 @@ class PolicyCompilerService:
 
 		raise ValueError(f'Unsupported compilation target: {target}')
 
+	def _compile_local(self, urns: str | list[str], obligations: list[Obligation], context: dict) -> str:
+		"""
+		Generates the 'local_policies.json' artifact containing ALL resolved policies.
+		"""
+		target_urns = [urns] if isinstance(urns, str) else urns
+		resolved_policies = []
+
+		# 1. Bulk Resolution
+		# In a real system, we would filter 'obligations' per URN based on tags/pattern matching
+		# before passing to resolve(). For MVP, we assume global scope or pre-filtered inputs. # TODO
+		for urn in target_urns:
+			# We treat the passed obligations as the "Candidate Set" for this resource.
+			policy = self.rules_engine.resolve(urn, obligations)
+			resolved_policies.append(policy)
+
+		# 2. Extract Metadata from context
+		project_name = str(context.get('project_name', 'unknown'))
+		git_hash = str(context.get('git_hash', '')) or None
+
+		# 3. Generate Artifact
+		return self.local_gen.generate(policies=resolved_policies, project_name=project_name, git_hash=git_hash)
+
 	def _compile_snowflake(self, policy: ResolvedPolicy, context: dict) -> str:
-		"""
-		Generates Snowflake SQL for both Column-level (Masking) and Row-level (Access) security.
-		"""
+		"""Generates Snowflake SQL."""
 		if not self.snowflake_gen:
 			raise RuntimeError('SnowflakeGenerator not initialized. Provide templates_path.')
 
@@ -90,8 +123,6 @@ class PolicyCompilerService:
 
 		sql_statements = []
 
-		# 1. Privacy / Masking Policy (Column Level)
-		# Resolved via PrivacySolver (e.g. Differential Privacy vs Pseudonymization)
 		if policy.privacy:
 			masking_sql = self.snowflake_gen.generate_masking_policy(
 				policy_name=f'ambyte_mask_{policy.resource_urn.split(":")[-1]}',
@@ -102,18 +133,14 @@ class PolicyCompilerService:
 			)
 			sql_statements.append(masking_sql)
 
-		# 2. Purpose / Row Access Policy (Row Level)
-		# Resolved via PurposeSolver (e.g. Blocking Marketing use)
 		if policy.purpose:
-			# Convert sets to sorted lists for deterministic SQL generation
 			denied_list = sorted(policy.purpose.denied_purposes)
-
 			rap_sql = self.snowflake_gen.generate_row_access_policy(
 				policy_name=f'ambyte_row_access_{policy.resource_urn.split(":")[-1]}',
 				input_type=input_type,
 				ref_column=ref_column,
 				allowed_roles=allowed_roles,  # type: ignore
-				denied_roles=[],  # Can be mapped from denied purposes if needed
+				denied_roles=[],
 				denied_purposes=denied_list,
 				comment=f'Source: {policy.purpose.reason.winning_source_id}. Denied Purposes: {len(denied_list)}',
 			)
@@ -125,10 +152,8 @@ class PolicyCompilerService:
 		return '\n\n'.join(sql_statements)
 
 	def _compile_opa(self, policy: ResolvedPolicy) -> dict:
-		# OPA expects a JSON bundle
 		return self.rego_gen.build_bundle_data(policy)
 
 	def _compile_iam(self, policy: ResolvedPolicy, context: dict) -> str:
-		# IAM needs the native ARN
 		resource_arn = str(context.get('resource_arn', policy.resource_urn))
 		return self.iam_gen.build_guardrail_policy(policy, resource_arn)

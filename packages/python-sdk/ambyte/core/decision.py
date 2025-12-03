@@ -1,4 +1,3 @@
-import json
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -6,7 +5,11 @@ from typing import Any, Optional
 from ambyte.client import get_client
 from ambyte.config import AmbyteMode, get_config
 from ambyte.context import get_current_actor, get_current_run_id, get_extra_context
+from ambyte.core.evaluator import LocalPolicyEvaluator
+from ambyte_rules.models import ResolvedPolicy
+from ambyte_schemas.models.artifact import PolicyBundle
 from cachetools import TTLCache
+from pydantic import ValidationError
 
 logger = logging.getLogger('ambyte.core.decision')
 
@@ -16,9 +19,9 @@ class DecisionEngine:
 	The Policy Decision Point (PDP).
 
 	Responsible for:
-	1. resolving the full context of a request (Actor + Run ID + Attributes).
-	2. checking the decision cache to avoid redundant network calls.
-	3. routing the check to the correct backend (Remote API vs Local File).
+	1. Resolving the full context of a request (Actor + Run ID + Attributes).
+	2. Checking the decision cache to avoid redundant calculations/calls.
+	3. Routing the check to the correct backend (Remote API vs Local Evaluator).
 	"""
 
 	_instance: Optional['DecisionEngine'] = None
@@ -32,7 +35,9 @@ class DecisionEngine:
 		self._cache = TTLCache(maxsize=10000, ttl=self.config.decision_cache_ttl_seconds)
 
 		# Local Policy State (for LOCAL mode)
-		self._local_policy_data: dict[str, Any] = {}
+		self._local_policies: dict[str, ResolvedPolicy] = {}
+		self.evaluator = LocalPolicyEvaluator()
+
 		if self.config.mode == AmbyteMode.LOCAL:
 			self._load_local_policy()
 
@@ -67,7 +72,7 @@ class DecisionEngine:
 		if self.config.mode == AmbyteMode.REMOTE:
 			is_allowed = self._execute_remote(resource_urn, action, actor_id, final_context)
 		elif self.config.mode == AmbyteMode.LOCAL:
-			is_allowed = self._execute_local(resource_urn, action)
+			is_allowed = self._execute_local(resource_urn, action, final_context)
 
 		# 4. Update Cache & Return
 		self._cache[cache_key] = is_allowed
@@ -92,7 +97,7 @@ class DecisionEngine:
 			is_allowed = await get_client().check_permission_async(resource_urn, action, actor_id, final_context)
 		elif self.config.mode == AmbyteMode.LOCAL:
 			# Local is always sync (memory lookup), just wrap it
-			is_allowed = self._execute_local(resource_urn, action)
+			is_allowed = self._execute_local(resource_urn, action, final_context)
 
 		self._cache[cache_key] = is_allowed
 		return is_allowed
@@ -139,19 +144,29 @@ class DecisionEngine:
 		"""Delegates to the HTTP Client."""
 		return get_client().check_permission(resource_urn=urn, action=action, actor_id=actor_id, context=context)
 
-	def _execute_local(self, urn: str, action: str) -> bool:
+	def _execute_local(self, urn: str, action: str, context: dict) -> bool:
 		"""
-		Simple lookup against loaded JSON policies.
-		Structure Expected: { "urn:xyz": { "read": "ALLOW", "write": "DENY" } }
+		Evaluates the request against the loaded PolicyBundle.
 		"""
-		resource_rules = self._local_policy_data.get(urn, {})
-		decision = resource_rules.get(action, 'DENY')  # Default deny if not found
+		# 1. Lookup Policy
+		policy = self._local_policies.get(urn)
 
-		return decision == 'ALLOW'
+		if not policy:
+			# Default Deny if no policy exists for this specific resource
+			logger.debug("No local policy found for '%s'. Defaulting to DENY.", urn)
+			return False
+
+		# 2. Evaluate
+		allowed, reason = self.evaluator.evaluate(policy, action, context)
+
+		if not allowed:
+			logger.info("Local Access Denied for '%s': %s", urn, reason)
+
+		return allowed
 
 	def _load_local_policy(self):
 		"""
-		Loads the JSON bundle defined in config.local_policy_path.
+		Loads the 'local_policies.json' artifact into Pydantic models.
 		"""
 		path_str = self.config.local_policy_path
 		if not path_str:
@@ -160,15 +175,27 @@ class DecisionEngine:
 
 		path = Path(path_str)
 		if not path.exists():
-			logger.error(f'Local policy file not found at: {path}. Defaulting to DENY ALL.')  # pylint: disable=logging-fstring-interpolation
+			logger.error('Local policy file not found at: %s. Defaulting to DENY ALL.', path)
 			return
 
 		try:
 			with open(path, encoding='utf-8') as f:
-				self._local_policy_data = json.load(f)
-			logger.info(f'Loaded local policy bundle from {path}')  # pylint: disable=logging-fstring-interpolation
-		except json.JSONDecodeError as e:
-			logger.error(f'Failed to parse local policy file: {e}')  # pylint: disable=logging-fstring-interpolation
+				json_content = f.read()
+
+			# Parse using Pydantic Schema
+			bundle = PolicyBundle.model_validate_json(json_content)
+
+			# Store map for O(1) lookup
+			self._local_policies = bundle.policies
+
+			logger.info(
+				'Loaded policy bundle v%s (%d policies) from %s', bundle.schema_version, len(self._local_policies), path
+			)
+
+		except ValidationError as e:
+			logger.error('Invalid policy bundle schema: %s', e)
+		except Exception as e:
+			logger.error('Failed to load local policy file: %s', e)
 
 
 # Global Accessor
