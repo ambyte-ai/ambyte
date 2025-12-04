@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timezone
-from typing import Any, Tuple
+from typing import Any
 
 from ambyte_rules.models import (
 	EffectiveAiRules,
@@ -22,7 +22,7 @@ class LocalPolicyEvaluator:
 	It returns a boolean decision (ALLOW/DENY).
 	"""
 
-	def evaluate(self, policy: ResolvedPolicy, action: str, context: dict[str, Any]) -> Tuple[bool, str]:
+	def evaluate(self, policy: ResolvedPolicy, action: str, context: dict[str, Any]) -> tuple[bool, str]:
 		"""
 		Main entry point for evaluation.
 
@@ -61,7 +61,7 @@ class LocalPolicyEvaluator:
 
 		return True, 'Access Allowed'
 
-	def _check_geo(self, rule: EffectiveGeofencing, context: dict) -> Tuple[bool, str]:
+	def _check_geo(self, rule: EffectiveGeofencing, context: dict) -> tuple[bool, str]:
 		"""
 		Validates data residency requirements.
 		"""
@@ -90,7 +90,7 @@ class LocalPolicyEvaluator:
 
 		return True, 'Region allowed'
 
-	def _check_purpose(self, rule: EffectivePurpose, context: dict) -> Tuple[bool, str]:
+	def _check_purpose(self, rule: EffectivePurpose, context: dict) -> tuple[bool, str]:
 		"""
 		Validates purpose limitation.
 		"""
@@ -114,7 +114,7 @@ class LocalPolicyEvaluator:
 
 		return True, 'Purpose allowed'
 
-	def _check_ai(self, rule: EffectiveAiRules, action: str) -> Tuple[bool, str]:
+	def _check_ai(self, rule: EffectiveAiRules, action: str) -> tuple[bool, str]:
 		"""
 		Validates AI-specific actions like training or RAG.
 		"""
@@ -136,7 +136,7 @@ class LocalPolicyEvaluator:
 
 		return True, 'AI action allowed'
 
-	def _check_retention(self, rule: EffectiveRetention, context: dict) -> Tuple[bool, str]:
+	def _check_retention(self, rule: EffectiveRetention, context: dict) -> tuple[bool, str]:
 		"""
 		Validates data expiration.
 		"""

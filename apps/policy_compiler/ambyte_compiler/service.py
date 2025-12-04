@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ResolvedPolicy
@@ -11,6 +11,7 @@ from apps.policy_compiler.ambyte_compiler.generators import (
 	RegoDataBuilder,
 	SnowflakeGenerator,
 )
+from apps.policy_compiler.ambyte_compiler.matcher import ResourceMatcher
 
 TargetPlatform = Literal['snowflake', 'opa', 'aws_iam', 'local']
 
@@ -20,12 +21,13 @@ class PolicyCompilerService:
 	The main entry point for the Policy-as-Code subsystem.
 
 	This service orchestrates the flow from:
-	Raw Obligations -> Conflict Resolution -> Optimized Code Generation.
+	Raw Obligations + Inventory -> Matching -> Conflict Resolution -> Optimized Code Generation.
 	"""
 
 	def __init__(self, templates_path: Path | None = None):
 		# 1. The Brain (Logic)
 		self.rules_engine = ConflictResolutionEngine()
+		self.matcher = ResourceMatcher()
 
 		# 2. The Hands (Generators)
 		# We initialize generators lazily or eagerly. Eager is fine for now.
@@ -41,7 +43,7 @@ class PolicyCompilerService:
 
 	def compile(
 		self,
-		resource_urn: str | list[str],
+		resources: list[dict[str, Any]],
 		obligations: list[Obligation],
 		target: TargetPlatform,
 		context: dict[str, str | list[str]] | None = None,
@@ -50,33 +52,46 @@ class PolicyCompilerService:
 		Compiles obligations into an executable artifact for a specific target.
 
 		Args:
-			resource_urn: The ID(s) of the resource to compile for.
-					Pass a List[str] only if target='local' (Bulk Compilation).
-			obligations: List of all applicable legal/contractual rules.
-			target: The system we are generating code for.
-			context: Extra parameters (e.g. 'project_name', 'git_hash', 'input_type').
+		    resources: List of dictionaries representing the inventory.
+		               Format: [{'urn': '...', 'tags': {'env': 'prod', ...}}]
+		    obligations: List of all defined legal/contractual rules.
+		    target: The system we are generating code for.
+		    context: Extra parameters (e.g. 'project_name', 'git_hash', 'input_type').
 
 		Returns:
-			str: SQL/JSON string (Snowflake, IAM, Local).
-			dict: JSON object (OPA data bundle).
-		"""
+		    str: SQL/JSON string (Snowflake, IAM, Local).
+		    dict: JSON object (OPA data bundle).
+		"""  # noqa: E101
 		if context is None:
 			context = {}
 
 		# --- Target: LOCAL (Bulk Python Artifact) ---
+		# Generates a bundle containing resolved policies for ALL provided resources.
 		if target == 'local':
-			return self._compile_local(resource_urn, obligations, context)
+			return self._compile_local(resources, obligations, context)
 
 		# --- Single Resource Targets ---
-		# For non-local targets, we enforce single URN processing for now. # TODO
-		if isinstance(resource_urn, list):
-			raise ValueError(f"Target '{target}' does not support bulk compilation. Pass a single URN.")
+		# For cloud targets (Snowflake/OPA/IAM), we currently enforce single-resource processing
+		# per call to keep the artifact output granular (one file per resource).
+		if len(resources) != 1:
+			raise ValueError(
+				f"Target '{target}' expects exactly one resource context. "
+				f'Received {len(resources)}. For bulk processing, use target="local" '
+				'or iterate in the caller.'
+			)
 
-		# Step 1: Resolve Conflicts
-		# This reduces 50 conflicting rules into 1 mathematical truth.
-		effective_policy: ResolvedPolicy = self.rules_engine.resolve(resource_urn, obligations)
+		target_res = resources[0]
+		urn = str(target_res['urn'])
+		tags = target_res.get('tags', {})
 
-		# Step 2: Route to Generator
+		# Step 1: Matching (Filter Global Obligations -> Local Scope)
+		applicable_obligations = [ob for ob in obligations if self.matcher.matches(urn, tags, ob)]
+
+		# Step 2: Resolve Conflicts
+		# This reduces N conflicting rules into 1 mathematical truth for this specific URN.
+		effective_policy: ResolvedPolicy = self.rules_engine.resolve(urn, applicable_obligations)
+
+		# Step 3: Route to Generator
 		if target == 'snowflake':
 			return self._compile_snowflake(effective_policy, context)
 		if target == 'opa':
@@ -86,26 +101,32 @@ class PolicyCompilerService:
 
 		raise ValueError(f'Unsupported compilation target: {target}')
 
-	def _compile_local(self, urns: str | list[str], obligations: list[Obligation], context: dict) -> str:
+	def _compile_local(self, resources: list[dict[str, Any]], obligations: list[Obligation], context: dict) -> str:
 		"""
-		Generates the 'local_policies.json' artifact containing ALL resolved policies.
+		Generates the 'local_policies.json' Bundle used by ambyte-sdk in LOCAL mode.
+		Resolves policies for every item in the inventory.
 		"""
-		target_urns = [urns] if isinstance(urns, str) else urns
 		resolved_policies = []
 
-		# 1. Bulk Resolution
-		# In a real system, we would filter 'obligations' per URN based on tags/pattern matching
-		# before passing to resolve(). For MVP, we assume global scope or pre-filtered inputs. # TODO
-		for urn in target_urns:
-			# We treat the passed obligations as the "Candidate Set" for this resource.
-			policy = self.rules_engine.resolve(urn, obligations)
+		for res in resources:
+			urn = str(res['urn'])
+			tags = res.get('tags', {})
+
+			# 1. Matching
+			# We test every obligation against this resource's specific context (URN + Tags)
+			applicable = [ob for ob in obligations if self.matcher.matches(urn, tags, ob)]
+
+			# 2. Resolution
+			# Even if 'applicable' is empty, we resolve it to generate a default (Open) policy object
+			# which prevents "Policy Not Found" errors at runtime.
+			policy = self.rules_engine.resolve(urn, applicable)
 			resolved_policies.append(policy)
 
-		# 2. Extract Metadata from context
+		# 3. Extract Metadata from context
 		project_name = str(context.get('project_name', 'unknown'))
 		git_hash = str(context.get('git_hash', '')) or None
 
-		# 3. Generate Artifact
+		# 4. Generate Artifact
 		return self.local_gen.generate(policies=resolved_policies, project_name=project_name, git_hash=git_hash)
 
 	def _compile_snowflake(self, policy: ResolvedPolicy, context: dict) -> str:

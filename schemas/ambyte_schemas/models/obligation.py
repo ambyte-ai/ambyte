@@ -163,6 +163,31 @@ class SourceProvenance(AmbyteBaseModel):
 		)
 
 
+class ResourceSelector(AmbyteBaseModel):
+	"""
+	Defines scope: URN patterns and Tags used to match resources.
+	"""
+
+	include_patterns: list[str] = Field(default_factory=list)
+	exclude_patterns: list[str] = Field(default_factory=list)
+	match_tags: dict[str, str] = Field(default_factory=dict)
+
+	def to_proto(self) -> obligation_pb2.ResourceSelector:
+		return obligation_pb2.ResourceSelector(
+			include_patterns=self.include_patterns,
+			exclude_patterns=self.exclude_patterns,
+			match_tags=self.match_tags,
+		)
+
+	@classmethod
+	def from_proto(cls, proto: obligation_pb2.ResourceSelector) -> 'ResourceSelector':
+		return cls(
+			include_patterns=list(proto.include_patterns),
+			exclude_patterns=list(proto.exclude_patterns),
+			match_tags=dict(proto.match_tags),
+		)
+
+
 # ==============================================================================
 # Main Model
 # ==============================================================================
@@ -174,6 +199,7 @@ class Obligation(AmbyteBaseModel):
 	description: str
 	provenance: SourceProvenance
 	enforcement_level: EnforcementLevel = EnforcementLevel.AUDIT_ONLY
+	target: ResourceSelector = Field(default_factory=ResourceSelector)
 
 	# We use Optional fields to represent the 'OneOf'.
 	# In Pydantic validation, you might want to enforce that exactly one is set,
@@ -197,6 +223,8 @@ class Obligation(AmbyteBaseModel):
 		if self.updated_at:
 			updated_ts.FromDatetime(self.updated_at)
 
+		target_selector: ResourceSelector = self.target
+
 		# Build the base object
 		obj = obligation_pb2.Obligation(
 			id=self.id,
@@ -204,6 +232,7 @@ class Obligation(AmbyteBaseModel):
 			description=self.description,
 			provenance=self.provenance.to_proto(),
 			enforcement_level=cast(Any, self.enforcement_level),
+			target=target_selector.to_proto(),  # pylint: disable=E1101
 			created_at=created_ts if self.created_at else None,
 			updated_at=updated_ts if self.updated_at else None,
 		)
@@ -233,6 +262,7 @@ class Obligation(AmbyteBaseModel):
 			description=proto.description,
 			provenance=SourceProvenance.from_proto(proto.provenance),
 			enforcement_level=EnforcementLevel(proto.enforcement_level),
+			target=ResourceSelector.from_proto(proto.target) if proto.HasField('target') else ResourceSelector(),
 			# Map the active constraint
 			retention=RetentionRule.from_proto(proto.retention) if which_constraint == 'retention' else None,
 			geofencing=GeofencingRule.from_proto(proto.geofencing) if which_constraint == 'geofencing' else None,

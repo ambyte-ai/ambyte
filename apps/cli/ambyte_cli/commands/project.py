@@ -42,6 +42,24 @@ retention:
     allow_legal_hold_override: true
 """  # noqa: E101
 
+SAMPLE_RESOURCES_YAML = """# Ambyte Resource Inventory
+# Define your data assets here so policies can be mapped to them.
+
+resources:
+  - urn: "urn:snowflake:prod:sales:customers"
+    description: "Primary customer table in Snowflake"
+    tags:
+      domain: "sales"
+      sensitivity: "high"
+      contains_pii: "true"
+
+  - urn: "urn:s3:data-lake:logs"
+    description: "App logs bucket"
+    tags:
+      domain: "engineering"
+      sensitivity: "low"
+"""  # noqa: E101
+
 
 def init(
 	name: str = typer.Option(None, '--name', '-n', help='Name of the project. Defaults to current directory name.'),
@@ -93,6 +111,7 @@ def init(
 		# 5. Scaffold Directories
 		policies_dir = cwd / config.policies_dir
 		artifacts_dir = cwd / config.artifacts_dir  # noqa: F841
+		resources_dir = cwd / config.resources_dir
 
 		if not policies_dir.exists():
 			policies_dir.mkdir(parents=True)
@@ -106,6 +125,13 @@ def init(
 			with open(sample_path, 'w', encoding='utf-8') as f:
 				f.write(SAMPLE_OBLIGATION_YAML)
 			console.print(f'✅ Created sample obligation: [green]{config.policies_dir}/gdpr_sample.yaml[/green]')
+
+		# 7. Create Sample Inventory
+		resource_path = resources_dir / 'resources.yaml'
+		if not resource_path.exists():
+			with open(resource_path, 'w', encoding='utf-8') as f:
+				f.write(SAMPLE_RESOURCES_YAML)
+			console.print(f'✅ Created sample inventory: [green]{config.resources_dir}/resources.yaml[/green]')
 
 		# 7. Success Message
 		console.print('\n[bold green]Workspace initialized successfully![/bold green]')

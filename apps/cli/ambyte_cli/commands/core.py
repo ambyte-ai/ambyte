@@ -7,10 +7,17 @@ import logging
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import typer
-from ambyte_cli.config import AmbyteConfig, TargetPlatform, load_config
+from ambyte_cli.config import (
+	AmbyteConfig,
+	TargetPlatform,
+	get_workspace_root,
+	load_config,
+)
 from ambyte_cli.services.git import GitHistoryLoader
+from ambyte_cli.services.inventory import InventoryLoader
 from ambyte_cli.services.loader import ObligationLoader
 from ambyte_rules.engine import ConflictResolutionEngine
 from rich.console import Console
@@ -19,6 +26,7 @@ from rich.table import Table
 
 from apps.policy_compiler.ambyte_compiler.diff_engine.models import ChangeImpact
 from apps.policy_compiler.ambyte_compiler.diff_engine.service import SemanticDiffEngine
+from apps.policy_compiler.ambyte_compiler.matcher import ResourceMatcher
 from apps.policy_compiler.ambyte_compiler.service import PolicyCompilerService
 
 console = Console()
@@ -26,39 +34,73 @@ console = Console()
 logger = logging.getLogger(__name__)
 
 
+def _load_resource_context(urn: str) -> dict[str, Any]:
+	"""
+	Helper to find tags for a specific URN from the resources.yaml inventory.
+	Returns a dictionary: {'urn': ..., 'tags': {...}}
+	"""
+	try:
+		root = get_workspace_root()
+		inv_loader = InventoryLoader(root)
+		resources = inv_loader.load()
+
+		# Find matching resource
+		for r in resources:
+			if r.urn == urn:
+				return {'urn': r.urn, 'tags': r.tags}
+
+		# Fallback: Return empty tags if not in inventory
+		return {'urn': urn, 'tags': {}}
+	except Exception:
+		# If inventory fails to load, proceed with empty context
+		return {'urn': urn, 'tags': {}}
+
+
 def resolve(
 	resource_urn: str = typer.Argument(..., help='The Unique Resource Name (URN) to resolve policy for.'),
-	json: bool = typer.Option(False, '--json', help='Output raw JSON instead of formatted tables.'),
+	json_out: bool = typer.Option(False, '--json', help='Output raw JSON instead of formatted tables.'),
 ):
 	"""
 	Debug conflict resolution logic for a specific resource.
 
-	Loads all local obligations, feeds them into the Rules Engine,
-	and displays the final "Effective Policy" along with the
-	winning reasons (ConflictTrace).
+	1. Looks up the Resource in resources.yaml to get Tags.
+	2. Matches Obligations against URN + Tags.
+	3. Resolves conflicts to show the Effective Policy.
 	"""
 	try:
 		# 1. Setup Environment
 		config = load_config()
-		loader = ObligationLoader(config)
+		obl_loader = ObligationLoader(config)
 
 		# 2. Load Definitions
 		with console.status('[bold green]Loading obligations...[/bold green]'):
-			obligations = loader.load_all()
+			obligations = obl_loader.load_all()
 
 		if not obligations:
 			console.print('[yellow]No obligations found. Nothing to resolve.[/yellow]')
 			raise typer.Exit(1)
 
-		# 3. Run Engine
-		# Note: In a real system, we would first filter 'obligations' to only those
-		# applicable to 'resource_urn' (via Tags/Attributes). # TODO
-		# For the Local CLI MVP, we treat the 'policies/' folder as the active context.
-		engine = ConflictResolutionEngine()
-		resolved_policy = engine.resolve(resource_urn, obligations)
+		# 3. Load Resource Context (Tags)
+		resource_ctx = _load_resource_context(resource_urn)
+		tags = resource_ctx.get('tags', {})
 
-		# 4. Output
-		if json:
+		if tags:
+			console.print(f'[dim]Found tags for {resource_urn}: {tags}[/dim]')
+		else:
+			console.print(f'[dim]No tags found in inventory for {resource_urn}. Assuming empty context.[/dim]')
+
+		# 4. Match (Filter Global -> Local)
+		matcher = ResourceMatcher()
+		applicable = [ob for ob in obligations if matcher.matches(resource_urn, tags, ob)]
+
+		console.print(f'[dim]Matched {len(applicable)}/{len(obligations)} obligations.[/dim]')
+
+		# 5. Run Engine
+		engine = ConflictResolutionEngine()
+		resolved_policy = engine.resolve(resource_urn, applicable)
+
+		# 6. Output
+		if json_out:
 			console.print_json(resolved_policy.model_dump_json())
 		else:
 			_print_resolved_pretty(resolved_policy)
@@ -76,7 +118,8 @@ def build(clean: bool = typer.Option(False, '--clean', help='Clear existing arti
 	"""
 	try:
 		config = load_config()
-		loader = ObligationLoader(config)
+		obl_loader = ObligationLoader(config)
+		inv_loader = InventoryLoader(get_workspace_root())
 		out_dir = config.abs_artifacts_dir
 
 		# 1. Clean previous build
@@ -86,30 +129,41 @@ def build(clean: bool = typer.Option(False, '--clean', help='Clear existing arti
 
 		out_dir.mkdir(parents=True, exist_ok=True)
 
-		# 2. Load & Validate
-		with console.status('[bold green]Loading obligations...[/bold green]'):
-			obligations = loader.load_all()
+		# 2. Load Data
+		with console.status('[bold green]Loading inputs...[/bold green]'):
+			obligations = obl_loader.load_all()
+
+			# Load Inventory (resources.yaml)
+			# Convert Pydantic models to list of dicts for the compiler service
+			inventory_models = inv_loader.load()
+			resources = [{'urn': r.urn, 'tags': r.tags} for r in inventory_models]
+
 			if not obligations:
 				console.print('[yellow]No obligations found. Nothing to build.[/yellow]')
 				raise typer.Exit(0)
+
+			if not resources:
+				console.print('[yellow]No resources found in inventory. Using default wildcard context.[/yellow]')
+				resources = [{'urn': 'urn:local:default', 'tags': {}}]
 
 		# 3. Initialize Compiler Service
 		template_path = _get_template_path()
 		compiler = PolicyCompilerService(templates_path=template_path)
 
 		console.print(f'Building for targets: [cyan]{", ".join(config.targets)}[/cyan]')
+		console.print(f'Processing [bold]{len(resources)}[/bold] resources.')
 
 		# --- Target: LOCAL (JSON for Python SDK) ---
 		if TargetPlatform.LOCAL in config.targets:
-			_build_local(compiler, obligations, config)
+			_build_local(compiler, resources, obligations, config)
 
 		# --- Target: SNOWFLAKE (SQL) ---
 		if TargetPlatform.SNOWFLAKE in config.targets:
-			_build_snowflake(compiler, obligations, out_dir)
+			_build_snowflake(compiler, resources, obligations, out_dir)
 
 		# --- Target: OPA (Data Bundle) ---
 		if TargetPlatform.OPA in config.targets:
-			_build_opa(compiler, obligations, out_dir)
+			_build_opa(compiler, resources, obligations, out_dir)
 
 		# --- Target: AWS IAM ---
 		if TargetPlatform.AWS_IAM in config.targets:
@@ -130,12 +184,6 @@ def diff(
 ):
 	"""
 	Show semantic differences between current config and a previous git state.
-
-	This command:
-	1. Loads current obligations from disk.
-	2. Loads historic obligations from git `reference`.
-	3. Resolves both sets into Effective Policies for the target `resource`.
-	4. Computes the semantic diff (e.g. "Risk Increased", "Retention Reduced").
 	"""
 	try:
 		config = load_config()
@@ -158,19 +206,28 @@ def diff(
 			console.print('[yellow]No obligations found in either current or previous state.[/yellow]')
 			raise typer.Exit(0)
 
-		# 3. Resolve Policies
-		# We need to turn lists of obligations into a mathematical truth (ResolvedPolicy)
-		# so we can compare the *effect*, not just the text files.
-		rules_engine = ConflictResolutionEngine()
+		# 3. Load Context (Tags) for the specific resource
+		# We use the CURRENT inventory state for both to see how policy changes affect *this* resource.
+		resource_ctx = _load_resource_context(resource)
+		tags = resource_ctx.get('tags', {})
 
-		policy_now = rules_engine.resolve(resource, current_obs)
-		policy_then = rules_engine.resolve(resource, old_obs)
+		# 4. Match & Resolve (Current vs Old)
+		matcher = ResourceMatcher()
+		engine = ConflictResolutionEngine()
 
-		# 4. Compute Semantic Diff
+		# Current Policy
+		curr_filtered = [o for o in current_obs if matcher.matches(resource, tags, o)]
+		policy_now = engine.resolve(resource, curr_filtered)
+
+		# Old Policy (applied to current resource context)
+		old_filtered = [o for o in old_obs if matcher.matches(resource, tags, o)]
+		policy_then = engine.resolve(resource, old_filtered)
+
+		# 5. Compute Semantic Diff
 		diff_engine = SemanticDiffEngine()
 		report = diff_engine.compute_diff(policy_then, policy_now)
 
-		# 5. Render Output
+		# 6. Render Output
 		if markdown:
 			console.print(report.to_markdown())
 		else:
@@ -178,8 +235,6 @@ def diff(
 
 	except Exception as e:
 		console.print(f'[bold red]Diff failed:[/bold red] {e}')
-		# In debug mode, we might want to raise to see traceback
-		# raise e
 		raise typer.Exit(1) from None
 
 
@@ -188,42 +243,35 @@ def diff(
 # ==============================================================================
 
 
-def _build_local(compiler: PolicyCompilerService, obligations: list, config: AmbyteConfig):
+def _build_local(compiler: PolicyCompilerService, resources: list[dict], obligations: list, config: AmbyteConfig):
 	"""
-	Generates the local_policies.json Bundle used by ambyte-sdk in LOCAL mode.
+	Generates the local_policies.json Bundle.
+	The compiler handles bulk resolution for 'local' target internally.
 	"""
 	console.print('  • Generating [bold]Local Policy Bundle[/bold]...', end='')
 
 	out_dir = config.abs_artifacts_dir
 
-	# 1. Identify Target Resources
-	# In a full implementation, we'd scan a resources.yaml inventory.
-	# For this MVP, we compile a default/wildcard policy that applies generally.
-	# The SDK DecisionEngine will look up 'urn:local:default' if no specific match found,
-	# or the user explicitly guards 'urn:local:default'. # TODO
-	target_urns = ['urn:local:default']
-
-	# 2. Gather Context
-	# Try to grab git hash for the artifact metadata
+	# Context for metadata
 	git_hash = None
 	try:
 		git_path = shutil.which('git')
-		# Simple attempt to get hash
-		git_hash = (
-			subprocess.check_output([git_path, 'rev-parse', '--short', 'HEAD'], stderr=subprocess.DEVNULL)  # noqa: S603
-			.decode()
-			.strip()
-		)
+		if git_path:
+			git_hash = (
+				subprocess.check_output([git_path, 'rev-parse', '--short', 'HEAD'], stderr=subprocess.DEVNULL)  # noqa: S603
+				.decode()
+				.strip()
+			)
 	except Exception:
 		logger.warning('Failed to get git hash for build metadata.', exc_info=True)
 		pass
 
 	context = {'project_name': config.project_name, 'git_hash': git_hash}
 
-	# 3. Compiler Service Call (Target='local')
-	bundle_json = compiler.compile(resource_urn=target_urns, obligations=obligations, target='local', context=context)
+	# Compiler Call
+	bundle_json = compiler.compile(resources=resources, obligations=obligations, target='local', context=context)
 
-	# 4. Write to Disk
+	# Write to Disk
 	out_file = out_dir / 'local_policies.json'
 	with open(out_file, 'w', encoding='utf-8') as f:
 		f.write(str(bundle_json))
@@ -231,33 +279,60 @@ def _build_local(compiler: PolicyCompilerService, obligations: list, config: Amb
 	console.print(' [green]Done[/green]')
 
 
-def _build_snowflake(compiler: PolicyCompilerService, obligations: list, out_dir: Path):
-	"""Generates masking policy SQL."""
+def _build_snowflake(compiler: PolicyCompilerService, resources: list[dict], obligations: list, out_dir: Path):
+	"""
+	Generates masking policy SQL.
+	Iterates through inventory and concatenates all SQL into one file.
+	"""
 	console.print('  • Generating [bold]Snowflake SQL[/bold]...', end='')
 
-	# Example context. In a real CLI, this might come from --context or a resources.yaml # TODO
+	# Context defaults (would normally come from config per-resource) # TODO
 	ctx = {'input_type': 'VARCHAR', 'allowed_roles': ['ADMIN', 'PII_READER']}
 
-	sql = compiler.compile(
-		resource_urn='urn:snowflake:example', obligations=obligations, target='snowflake', context=ctx
-	)
+	all_sql = []
+
+	for res in resources:
+		# Check if this resource is relevant for Snowflake (heuristic or type check)
+		urn = res['urn']
+		if 'snowflake' not in urn and 'db' not in urn:
+			continue
+
+		try:
+			# Pass single resource list
+			sql = compiler.compile(resources=[res], obligations=obligations, target='snowflake', context=ctx)
+			if sql and 'No active' not in str(sql):
+				all_sql.append(f'-- Resource: {urn}\n{sql}')
+		except Exception as e:
+			logger.warning(f'Failed to compile SQL for {urn}: {e}')
 
 	out_file = out_dir / 'masking_policies.sql'
 	with open(out_file, 'w', encoding='utf-8') as f:
-		f.write(str(sql))
+		f.write('\n\n'.join(all_sql))
 
 	console.print(' [green]Done[/green]')
 
 
-def _build_opa(compiler: PolicyCompilerService, obligations: list, out_dir: Path):
-	"""Generates data.json for OPA."""
+def _build_opa(compiler: PolicyCompilerService, resources: list[dict], obligations: list, out_dir: Path):
+	"""
+	Generates data.json for OPA.
+	Creates a dictionary of { "urn": { policy... } }
+	"""
 	console.print('  • Generating [bold]OPA Bundle[/bold]...', end='')
 
-	data = compiler.compile(resource_urn='urn:opa:example', obligations=obligations, target='opa')
+	master_bundle = {}
+
+	for res in resources:
+		try:
+			data = compiler.compile(resources=[res], obligations=obligations, target='opa')
+			if isinstance(data, dict):
+				master_bundle[res['urn']] = data
+		except Exception as e:
+			logger.warning(f'Failed to compile OPA for {res["urn"]}: {e}')
 
 	out_file = out_dir / 'data.json'
 	with open(out_file, 'w', encoding='utf-8') as f:
-		json.dump(data, f, indent=2, default=str)
+		# Wrap in a root key for cleaner Rego lookup: data.ambyte.policies[urn]
+		json.dump({'policies': master_bundle}, f, indent=2, default=str)
 
 	console.print(' [green]Done[/green]')
 
@@ -265,43 +340,30 @@ def _build_opa(compiler: PolicyCompilerService, obligations: list, out_dir: Path
 def _get_template_path() -> Path:
 	"""
 	Locates the SQL templates directory.
-	Attempts to find 'policy-library/sql_templates' relative to the project root.
 	"""
-	# 1. Try generic project structure (dev mode)
-	# The config helper knows where the root is
 	from ambyte_cli.config import get_workspace_root
 
 	try:
 		root = get_workspace_root()
-		# In the monorepo, it is at root/policy-library
-		# But if the user ran 'ambyte init' in a subfolder, get_workspace_root is that subfolder.
-		# This implies 'policy-library' must exist inside the user's workspace
-		# OR be embedded in the installed python package.
 
-		# STRATEGY: Look in python package first (installed mode)
-		import apps.policy_compiler
-
-		package_root = Path(apps.policy_compiler.__file__).parent  # noqa: F841
-		# Assuming templates are packaged inside the compiler during build
-		# (This requires pyproject.toml adjustments to include data files)
-		# For now, let's fallback to the dev path in the monorepo logic # TODO
-
-		# Hardcoded dev check for this environment
-		repo_root = root.parent.parent  # apps/cli -> root
+		# 1. Dev/Monorepo path
+		# Traverse up to find repo root if running from inside cli app
+		repo_root = root.parent.parent
 		candidate = repo_root / 'policy-library' / 'sql_templates'
 		if candidate.exists():
 			return candidate
 
-		# Fallback to local workspace if user copied them
+		# 2. User Workspace path (scaffolded)
 		candidate = root / 'templates'
 		if candidate.exists():
 			return candidate
+
+		# 3. Installed package path (TODO: Use pkg_resources)
 
 	except Exception:
 		logger.warning('Failed to locate template path, falling back to default.', exc_info=True)
 		pass
 
-	# Default fail-safe for the test environment context
 	return Path('policy-library/sql_templates')
 
 
@@ -344,8 +406,8 @@ def _print_diff_report(report, reference_name):
 	table.add_column('Description')
 
 	icon_map = {
-		ChangeImpact.PERMISSIVE: '[red]🔓 Looser[/red]',  # Permissive is risky
-		ChangeImpact.RESTRICTIVE: '[green]🔒 Stricter[/green]',  # Restrictive is safe
+		ChangeImpact.PERMISSIVE: '[red]🔓 Looser[/red]',
+		ChangeImpact.RESTRICTIVE: '[green]🔒 Stricter[/green]',
 		ChangeImpact.NEUTRAL: '[blue]📝 Info[/blue]',
 	}
 

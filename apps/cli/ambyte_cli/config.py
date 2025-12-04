@@ -15,6 +15,7 @@ CONFIG_DIR_NAME = '.ambyte'
 CONFIG_FILE_NAME = 'config.yaml'
 DEFAULT_POLICIES_DIR = 'policies'
 DEFAULT_ARTIFACTS_DIR = '.ambyte/dist'
+DEFAULT_RESOURCES_DIR = 'resources'
 
 
 class TargetPlatform(StrEnum):
@@ -55,6 +56,9 @@ class AmbyteConfig(BaseModel):
 	artifacts_dir: Path = Field(
 		default=Path(DEFAULT_ARTIFACTS_DIR), description='Directory where compiled outputs are written.'
 	)
+	resources_dir: Path = Field(
+		default=Path(DEFAULT_RESOURCES_DIR), description='Directory containing resource inventory files.'
+	)
 
 	# Compilation Settings
 	targets: list[TargetPlatform] = Field(
@@ -73,6 +77,11 @@ class AmbyteConfig(BaseModel):
 	def abs_artifacts_dir(self) -> Path:
 		"""Returns the absolute path to the artifacts directory."""
 		return get_workspace_root() / self.artifacts_dir
+
+	@property
+	def abs_resources_dir(self) -> Path:
+		"""Returns the absolute path to the resources directory."""
+		return get_workspace_root() / self.resources_dir
 
 
 # ==============================================================================

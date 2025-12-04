@@ -25,6 +25,10 @@ message Obligation {
   // AUDIT_ONLY: Allow but log a warning (soft enforcement).
   EnforcementLevel enforcement_level = 5;
 
+  // Defines the scope of this obligation.
+  // Determines which resources (via URN pattern or Tags) this rule applies to.
+  ResourceSelector target = 6;
+
   // The actual technical constraint.
   // Using 'oneof' ensures this obligation maps to exactly one logic type.
   oneof constraint {
@@ -38,6 +42,24 @@ message Obligation {
   // System timestamps
   google.protobuf.Timestamp created_at = 20;
   google.protobuf.Timestamp updated_at = 21;
+}
+
+// =============================================================================
+// Targeting Logic
+// =============================================================================
+
+message ResourceSelector {
+  // Glob patterns to match Resource URNs (e.g., "urn:snowflake:sales:*", "urn:s3:**").
+  // If empty, it implies "Match All" (provided tags also match).
+  repeated string include_patterns = 1;
+
+  // Glob patterns to explicitly exclude from the match.
+  // e.g., "urn:snowflake:sales:public_reference_table"
+  repeated string exclude_patterns = 2;
+
+  // Resource must have ALL of these tags to match (AND logic).
+  // e.g. {"sensitivity": "high", "domain": "sales"}
+  map<string, string> match_tags = 3;
 }
 
 // =============================================================================

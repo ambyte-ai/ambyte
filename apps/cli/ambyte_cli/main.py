@@ -73,9 +73,9 @@ def version_callback(value: bool):
 	Prints the version and exits.
 	"""
 	if value:
-		try:
-			from importlib import metadata
+		from importlib import metadata
 
+		try:
 			version = metadata.version('ambyte-cli')
 		except metadata.PackageNotFoundError:
 			version = 'dev'
