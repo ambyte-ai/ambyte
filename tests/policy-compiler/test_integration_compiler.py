@@ -8,6 +8,9 @@ from ambyte_schemas.models.obligation import (
 	EnforcementLevel,
 	GeofencingRule,
 	Obligation,
+	PrivacyEnhancementRule,
+	PrivacyMethod,
+	ResourceSelector,
 	RetentionRule,
 	RetentionTrigger,
 	SourceProvenance,
@@ -58,6 +61,7 @@ def make_retention_ob(id: str, days: int) -> Obligation:
 		provenance=make_provenance(f'SRC-{id}'),
 		enforcement_level=EnforcementLevel.BLOCKING,
 		retention=RetentionRule(duration=timedelta(days=days), trigger=RetentionTrigger.CREATION_DATE),
+		target=ResourceSelector(include_patterns=['*']),
 	)
 
 
@@ -69,6 +73,7 @@ def make_geo_ob(id: str, allowed: list[str], denied: list[str]) -> Obligation:
 		provenance=make_provenance(f'SRC-{id}'),
 		enforcement_level=EnforcementLevel.BLOCKING,
 		geofencing=GeofencingRule(allowed_regions=allowed, denied_regions=denied),
+		target=ResourceSelector(include_patterns=['*']),
 	)
 
 
@@ -80,6 +85,19 @@ def make_ai_ob(id: str, training_allowed: bool) -> Obligation:
 		provenance=make_provenance(f'SRC-{id}'),
 		enforcement_level=EnforcementLevel.BLOCKING,
 		ai_model=AiModelConstraint(training_allowed=training_allowed, attribution_text_required='Credit Ambyte'),
+		target=ResourceSelector(include_patterns=['*']),
+	)
+
+
+def make_privacy_ob(id: str, method: PrivacyMethod) -> Obligation:
+	return Obligation(
+		id=id,
+		title=f'Privacy Rule {id}',
+		description='...',
+		provenance=make_provenance(f'SRC-{id}'),
+		enforcement_level=EnforcementLevel.BLOCKING,
+		privacy=PrivacyEnhancementRule(method=method, parameters={}),
+		target=ResourceSelector(include_patterns=['*']),
 	)
 
 
@@ -88,24 +106,24 @@ def make_ai_ob(id: str, training_allowed: bool) -> Obligation:
 # ------------------------------------------------------------------------------
 
 
-def test_pipeline_snowflake_retention(templates_dir):
+def test_pipeline_snowflake_privacy(templates_dir):
 	"""
 	Scenario:
-	1. Two conflicting retention rules (Contract: 5 years, GDPR: 2 years).
-	2. Compiler should resolve to 2 years (Strictest).
-	3. Generator should produce valid Snowflake SQL masking policy.
+	1. Two conflicting privacy rules (Unspecified vs Pseudonymization).
+	2. Compiler should resolve to Pseudonymization (Stronger wins).
+	3. Generator should produce valid Snowflake SQL masking policy using SHA2.
 	"""
 	service = PolicyCompilerService(templates_path=templates_dir)
 
 	# 1. Input: Conflicting Obligations
 	obs = [
-		make_retention_ob('MSA-001', days=365 * 5),  # 5 Years
-		make_retention_ob('GDPR-001', days=365 * 2),  # 2 Years (Winner)
+		make_privacy_ob('Default', method=PrivacyMethod.UNSPECIFIED),  # Weak
+		make_privacy_ob('GDPR-Hash', method=PrivacyMethod.PSEUDONYMIZATION),  # Stronger (Winner)
 	]
 
 	# 2. Compile
 	result = service.compile(
-		resource_urn='urn:snowflake:sales_db:customers:email',
+		resources=[{'urn': 'snowflake:sales_db:customers:email'}],
 		obligations=obs,
 		target='snowflake',
 		context={'input_type': 'STRING', 'allowed_roles': ['ADMIN', 'PII_READER']},
@@ -114,7 +132,8 @@ def test_pipeline_snowflake_retention(templates_dir):
 	# 3. Verify Output
 	assert isinstance(result, str)
 	assert 'CREATE OR REPLACE MASKING POLICY ambyte_mask_email' in result
-	assert 'sha2(val)' in result  # Checks default privacy method is HASH
+	# Pseudonymization maps to 'HASH' in generator, which triggers 'sha2(val)' in our test template
+	assert 'sha2(val)' in result
 	assert "'ADMIN', 'PII_READER'" in result
 	# Ensure the comment mentions valid obligations were found
 	assert 'Obligations: 2' in result
@@ -139,11 +158,11 @@ def test_pipeline_opa_geofencing():
 	]
 
 	# 2. Compile
-	result = service.compile(resource_urn='urn:api:user_service', obligations=obs, target='opa')
+	result = service.compile(resources=[{'urn': 'api:user_service'}], obligations=obs, target='opa')
 
 	# 3. Verify Output
 	assert isinstance(result, dict)
-	assert result['resource_urn'] == 'urn:api:user_service'
+	assert result['resource_urn'] == 'api:user_service'
 
 	geo_data = result['geofencing']
 	assert geo_data['allowed_regions'] == ['US']
@@ -166,7 +185,7 @@ def test_pipeline_iam_ai_guardrails():
 
 	# 2. Compile
 	result_json_str = service.compile(
-		resource_urn='urn:s3:sensitive-bucket',
+		resources=[{'urn': 's3:sensitive-bucket'}],
 		obligations=obs,
 		target='aws_iam',
 		context={'resource_arn': 'arn:aws:s3:::sensitive-bucket'},
@@ -181,8 +200,11 @@ def test_pipeline_iam_ai_guardrails():
 
 	assert ai_statement['Effect'] == 'Deny'
 	assert 'sagemaker:CreateTrainingJob' in ai_statement['Action']
-	# Check simple resource binding
-	assert ai_statement['Condition']['StringLike']['sagemaker:InputDataConfig'] == 'arn:aws:s3:::sensitive-bucket'
+
+	# Verify updated Robust Logic (S3 URI Translation & ForAnyValue)
+	# It should verify that 'arn:aws:s3:::sensitive-bucket' got translated to 's3://sensitive-bucket/*'
+	condition_block = ai_statement['Condition']['ForAnyValue:StringLike']['sagemaker:InputDataConfig']
+	assert 's3://sensitive-bucket/*' in condition_block
 
 
 def test_end_to_end_diff_generation():

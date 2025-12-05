@@ -72,23 +72,36 @@ class IamPolicyBuilder:
 		# 2. AI & ML Restrictions
 		# If training is forbidden, we block SageMaker and Bedrock access to this resource.
 		if policy.ai_rules and not policy.ai_rules.training_allowed:
+			# Calculate S3 patterns for SageMaker's API matching
+			# SageMaker InputDataConfig matches against 's3://bucket/key', not ARNs.
+			s3_patterns = self._get_sagemaker_input_patterns(resource_arn)
+
 			statements.append(
 				{
 					'Sid': 'AmbyteBlockAiTraining',
 					'Effect': 'Deny',
 					'Action': [
+						# Training & Tuning
 						'sagemaker:CreateTrainingJob',
 						'sagemaker:CreateHyperParameterTuningJob',
 						'sagemaker:CreateAutoMLJob',
+						# Processing (DataBrew, Spark)
+						'sagemaker:CreateProcessingJob',
+						# Transformations (Batch Inference)
+						'sagemaker:CreateTransformJob',
+						# Labeling (Exposes data to humans/GroundTruth)
+						'sagemaker:CreateLabelingJob',
+						# Bedrock Customization
 						'bedrock:CreateModelCustomizationJob',
-						'bedrock:InvokeModel',  # Prevent using data in RAG/Inference if strictly mapped
+						# Direct Model Invocation (RAG Context)
+						'bedrock:InvokeModel',
 					],
-					'Resource': '*',  # SageMaker jobs often don't resource-level lock inputs easily,
-					'Condition': {  # so we block the action contextually if possible, or bind to resource
-						# This is an approximation. In real AWS, restricting input sources # TODO
-						# for SageMaker requires complex VPC Endpoint policies or S3 Bucket Policies.
-						# Here we generate a Bucket Policy snippet assuming 'resource_arn' is an S3 bucket.
-						'StringLike': {'sagemaker:InputDataConfig': resource_arn}
+					# We block the actions on * (Any Resource) but conditional on the Input Data
+					'Resource': '*',
+					'Condition': {
+						# ForAnyValue is required because InputDataConfig is an array in the API.
+						# StringLike allows us to match s3://bucket/* patterns.
+						'ForAnyValue:StringLike': {'sagemaker:InputDataConfig': s3_patterns}
 					},
 				}
 			)
@@ -158,3 +171,27 @@ class IamPolicyBuilder:
 		policy_doc = {'Version': '2012-10-17', 'Statement': statements}
 
 		return json.dumps(policy_doc, indent=4)
+
+	def _get_sagemaker_input_patterns(self, resource_arn: str) -> list[str]:
+		"""
+		Helper to translate an AWS ARN into the S3 URI format SageMaker uses
+		for InputDataConfig matching.
+
+		Input: arn:aws:s3:::my-sensitive-bucket
+		Output: ['s3://my-sensitive-bucket/*', 's3://my-sensitive-bucket']
+		"""
+		# If it's not an S3 ARN, fallback to using the ARN itself (e.g. Feature Store ARN)
+		if not resource_arn.startswith('arn:aws:s3:::'):
+			return [resource_arn]
+
+		# Strip the ARN prefix
+		clean_path = resource_arn.replace('arn:aws:s3:::', '')
+
+		# Handle cases where ARN might include subpaths or just bucket name
+		# Case A: arn:aws:s3:::bucket-name/folder/subfolder
+		# Case B: arn:aws:s3:::bucket-name
+
+		# For SageMaker matching, we generally want to block the whole bucket prefix
+		# if the policy applies to that resource.
+		# Note: IAM matching is finicky with trailing slashes, so we provide both variants.
+		return [f's3://{clean_path}/*', f's3://{clean_path}']

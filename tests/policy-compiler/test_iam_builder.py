@@ -79,9 +79,10 @@ def test_iam_global_ban():
 	assert stmt['Condition']['StringEquals']['ambyte:reason'] == 'global_ban'
 
 
-def test_iam_ai_restrictions():
+def test_iam_ai_restrictions_s3_translation():
 	"""
-	Verify that AI Training bans block SageMaker actions on the specific resource.
+	Verify that AI Training bans block SageMaker actions, and crucially,
+	translate the S3 ARN into the S3 URI format SageMaker API expects.
 	"""
 	builder = IamPolicyBuilder()
 
@@ -104,11 +105,42 @@ def test_iam_ai_restrictions():
 	ai_stmt = doc['Statement'][0]
 	assert ai_stmt['Sid'] == 'AmbyteBlockAiTraining'
 	assert ai_stmt['Effect'] == 'Deny'
-	assert 'sagemaker:CreateTrainingJob' in ai_stmt['Action']
-	assert 'bedrock:InvokeModel' in ai_stmt['Action']
 
-	# Verify the condition targets the input config
-	assert ai_stmt['Condition']['StringLike']['sagemaker:InputDataConfig'] == target_arn
+	# Verify expanded action list
+	actions = ai_stmt['Action']
+	assert 'sagemaker:CreateTrainingJob' in actions
+	assert 'sagemaker:CreateProcessingJob' in actions
+	assert 'bedrock:InvokeModel' in actions
+
+	# Verify the condition uses ForAnyValue:StringLike and translates ARN -> s3://...
+	condition = ai_stmt['Condition']['ForAnyValue:StringLike']['sagemaker:InputDataConfig']
+
+	# Should contain both wildcard and exact match
+	assert 's3://training-data/*' in condition
+	assert 's3://training-data' in condition
+	# Should NOT contain the raw ARN
+	assert target_arn not in condition
+
+
+def test_iam_ai_restrictions_non_s3_fallback():
+	"""
+	Verify that if the resource is NOT an S3 bucket (e.g. Feature Store),
+	it falls back to using the ARN directly.
+	"""
+	builder = IamPolicyBuilder()
+	policy = ResolvedPolicy(
+		resource_urn='urn:aws:featurestore', ai_rules=EffectiveAiRules(training_allowed=False, reason=make_trace('AI'))
+	)
+
+	target_arn = 'arn:aws:sagemaker:us-east-1:123456789012:feature-group/my-features'
+	json_str = builder.build_guardrail_policy(policy, target_arn)
+	doc = json.loads(json_str)
+
+	ai_stmt = doc['Statement'][0]
+	condition = ai_stmt['Condition']['ForAnyValue:StringLike']['sagemaker:InputDataConfig']
+
+	# Should fall back to list containing the raw ARN
+	assert condition == [target_arn]
 
 
 def test_iam_retention_hold():

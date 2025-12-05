@@ -3,12 +3,13 @@ from typing import Any, Literal
 
 from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ResolvedPolicy
-from ambyte_schemas.models.obligation import Obligation
+from ambyte_schemas.models.obligation import Obligation, PrivacyMethod
 
 from apps.policy_compiler.ambyte_compiler.generators import (
 	IamPolicyBuilder,
 	LocalPythonGenerator,
 	RegoDataBuilder,
+	S3BucketPolicyGenerator,
 	SnowflakeGenerator,
 )
 from apps.policy_compiler.ambyte_compiler.matcher import ResourceMatcher
@@ -38,6 +39,7 @@ class PolicyCompilerService:
 
 		self.rego_gen = RegoDataBuilder()
 		self.iam_gen = IamPolicyBuilder()
+		self.s3_gen = S3BucketPolicyGenerator()
 
 		self.local_gen = LocalPythonGenerator()
 
@@ -143,14 +145,20 @@ class PolicyCompilerService:
 			allowed_roles = [allowed_roles]
 
 		sql_statements = []
+		obs_count = len(policy.contributing_obligation_ids)
 
 		if policy.privacy:
+			# Safety check: Method might be stored as an int in the ResolvedPolicy
+			pm_val = policy.privacy.method
+			pm_name = pm_val.name if hasattr(pm_val, 'name') else PrivacyMethod(pm_val).name
 			masking_sql = self.snowflake_gen.generate_masking_policy(
 				policy_name=f'ambyte_mask_{policy.resource_urn.split(":")[-1]}',
 				input_type=input_type,
 				method=policy.privacy.method,
 				allowed_roles=allowed_roles,  # type: ignore
-				comment=f'Source: {policy.privacy.reason.winning_source_id}. Method: {policy.privacy.method.name}',
+				comment=(
+					f'Source: {policy.privacy.reason.winning_source_id}. Method: {pm_name}. Obligations: {obs_count}'
+				),
 			)
 			sql_statements.append(masking_sql)
 
@@ -163,7 +171,11 @@ class PolicyCompilerService:
 				allowed_roles=allowed_roles,  # type: ignore
 				denied_roles=[],
 				denied_purposes=denied_list,
-				comment=f'Source: {policy.purpose.reason.winning_source_id}. Denied Purposes: {len(denied_list)}',
+				comment=(
+					f'Source: {policy.purpose.reason.winning_source_id}. '
+					f'Denied Purposes: {len(denied_list)}. '
+					f'Obligations: {obs_count}'
+				),
 			)
 			sql_statements.append(rap_sql)
 
@@ -176,5 +188,26 @@ class PolicyCompilerService:
 		return self.rego_gen.build_bundle_data(policy)
 
 	def _compile_iam(self, policy: ResolvedPolicy, context: dict) -> str:
+		"""
+		Generates AWS IAM JSON.
+		Switches between Identity Policies (for Users/Roles) and Resource Policies (Buckets)
+		based on the 'iam_policy_type' context flag and resource type.
+		"""
 		resource_arn = str(context.get('resource_arn', policy.resource_urn))
+
+		# Default to 'identity' for backwards compatibility
+		# Options: 'identity' (Permission Boundary) | 'resource' (Bucket Policy)
+		policy_type = str(context.get('iam_policy_type', 'identity')).lower()
+
+		if policy_type == 'resource':
+			# Check if we have a generator for this resource type
+			if resource_arn.startswith('arn:aws:s3:::'):
+				return self.s3_gen.generate(policy, resource_arn)
+			# We currently only support Resource Policies for S3
+			raise ValueError(
+				f"Resource policy generation requested, but ARN '{resource_arn}' "
+				'is not a supported resource type (S3 only).'
+			)
+
+		# Default: Generate Identity / Guardrail Policy
 		return self.iam_gen.build_guardrail_policy(policy, resource_arn)
