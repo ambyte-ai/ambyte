@@ -1,8 +1,11 @@
 import logging
 from importlib import metadata
+from typing import Optional
 
 from ambyte_rules.models import ResolvedPolicy
 from ambyte_schemas.models.artifact import BuildMetadata, PolicyBundle
+
+from apps.policy_compiler.ambyte_compiler.validators import LocalBundleValidator
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +19,14 @@ class LocalPythonGenerator:
 	can load instantly into Pydantic models.
 	"""
 
+	def __init__(self):
+		self._validator = LocalBundleValidator()
+
 	def generate(
-		self, policies: list[ResolvedPolicy], project_name: str = 'unknown', git_hash: str | None = None
+		self,
+		policies: list[ResolvedPolicy],
+		project_name: str = 'unknown',
+		git_hash: Optional[str] = None,
 	) -> str:
 		"""
 		Creates the 'local_policies.json' content.
@@ -37,7 +46,11 @@ class LocalPythonGenerator:
 			compiler_version = 'dev'
 
 		# 2. Build Metadata
-		meta = BuildMetadata(compiler_version=compiler_version, project_name=project_name, git_hash=git_hash)
+		meta = BuildMetadata(
+			compiler_version=compiler_version,
+			project_name=project_name,
+			git_hash=git_hash,
+		)
 
 		# 3. Transform List -> Hash Map (O(1) Lookup)
 		# We index by resource_urn to allow the SDK to do `policies.get("urn:...")`
@@ -50,4 +63,15 @@ class LocalPythonGenerator:
 
 		# 5. Serialize to JSON
 		# exclude_none=True significantly reduces bundle size by removing unset constraints
-		return bundle.model_dump_json(indent=2, exclude_none=True)
+		json_output = bundle.model_dump_json(indent=2, exclude_none=True)
+
+		# 6. Validate (Round-Trip Check)
+		# Ensure the SDK can actually load what we just generated.
+		validation_result = self._validator.validate(json_output)
+
+		if not validation_result.is_valid:
+			error_msg = '; '.join(validation_result.errors)
+			logger.error(f'Generated Policy Bundle is invalid: {error_msg}')
+			raise ValueError(f'Local Bundle Generation Failed: {error_msg}')
+
+		return json_output

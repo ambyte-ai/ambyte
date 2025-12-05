@@ -1,7 +1,12 @@
 import json
+import logging
 from typing import Any
 
 from ambyte_rules.models import ResolvedPolicy
+
+from apps.policy_compiler.ambyte_compiler.validators import IamJsonValidator
+
+logger = logging.getLogger(__name__)
 
 
 class IamPolicyBuilder:
@@ -14,17 +19,24 @@ class IamPolicyBuilder:
 	constraints (like Geofencing) will block them.
 	"""
 
+	def __init__(self):
+		# Initialize the validator once
+		self._validator = IamJsonValidator()
+
 	def build_guardrail_policy(self, policy: ResolvedPolicy, resource_arn: str) -> str:
 		"""
 		Generates a Resource-Based Policy or Permission Boundary JSON.
 
 		Args:
-		policy: The resolved Ambyte rules.
-		resource_arn: The AWS ARN of the target resource (e.g. arn:aws:s3:::my-bucket).
+		    policy: The resolved Ambyte rules.
+		    resource_arn: The AWS ARN of the target resource (e.g. arn:aws:s3:::my-bucket).
 
 		Returns:
-		A JSON string representing the IAM Policy.
-		"""
+		    A JSON string representing the IAM Policy.
+
+		Raises:
+		    ValueError: If the generated policy fails structural validation.
+		"""  # noqa: E101
 		statements: list[dict[str, Any]] = []
 
 		# 1. Geofencing (Region Restrictions)
@@ -170,7 +182,17 @@ class IamPolicyBuilder:
 
 		policy_doc = {'Version': '2012-10-17', 'Statement': statements}
 
-		return json.dumps(policy_doc, indent=4)
+		json_output = json.dumps(policy_doc, indent=4)
+
+		# --- Self-Validation Step ---
+		# Ensure the builder never produces broken IAM Policies
+		validation_result = self._validator.validate(policy_doc)
+		if not validation_result.is_valid:
+			error_msg = '; '.join(validation_result.errors)
+			logger.error(f'Generated IAM Policy for {resource_arn} is invalid: {error_msg}')
+			raise ValueError(f'IAM Generation Failed: {error_msg}')
+
+		return json_output
 
 	def _get_sagemaker_input_patterns(self, resource_arn: str) -> list[str]:
 		"""
@@ -187,11 +209,6 @@ class IamPolicyBuilder:
 		# Strip the ARN prefix
 		clean_path = resource_arn.replace('arn:aws:s3:::', '')
 
-		# Handle cases where ARN might include subpaths or just bucket name
-		# Case A: arn:aws:s3:::bucket-name/folder/subfolder
-		# Case B: arn:aws:s3:::bucket-name
-
 		# For SageMaker matching, we generally want to block the whole bucket prefix
 		# if the policy applies to that resource.
-		# Note: IAM matching is finicky with trailing slashes, so we provide both variants.
 		return [f's3://{clean_path}/*', f's3://{clean_path}']

@@ -25,7 +25,7 @@ class S3BucketPolicyGenerator:
 
 		Returns:
 		    A JSON string representing the S3 Bucket Policy.
-		"""
+		"""  # noqa: E101
 		# Validate ARN format
 		if not resource_arn.startswith('arn:aws:s3:::'):
 			raise ValueError(f"Invalid S3 ARN: '{resource_arn}'. Must start with 'arn:aws:s3:::'.")

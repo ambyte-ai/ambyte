@@ -1,7 +1,12 @@
+import logging
 from datetime import datetime
 from typing import Any
 
 from ambyte_rules.models import ResolvedPolicy
+
+from apps.policy_compiler.ambyte_compiler.validators import OpaDataValidator
+
+logger = logging.getLogger(__name__)
 
 
 class RegoDataBuilder:
@@ -14,20 +19,23 @@ class RegoDataBuilder:
 
 	Output Structure Example:
 	{
-	    "resource_urn": "urn:snowflake:sales",
-	    "retention": { ... },
-	    "geofencing": { ... },
-	    "ai_rules": { ... },
-	    "purpose": {
-	        "allowed_purposes": ["ANALYTICS"],
-	        "denied_purposes": ["MARKETING"]
-	    },
-	    "privacy": {
-	        "method": "DIFFERENTIAL_PRIVACY",
-	        "parameters": {"epsilon": "0.5"}
-	    }
+		"resource_urn": "urn:snowflake:sales",
+		"retention": { ... },
+		"geofencing": { ... },
+		"ai_rules": { ... },
+		"purpose": {
+			"allowed_purposes": ["ANALYTICS"],
+			"denied_purposes": ["MARKETING"]
+		},
+		"privacy": {
+			"method": "DIFFERENTIAL_PRIVACY",
+			"parameters": {"epsilon": "0.5"}
+		}
 	}
 	"""  # noqa: E101
+
+	def __init__(self):
+		self._validator = OpaDataValidator()
 
 	def build_bundle_data(self, policy: ResolvedPolicy) -> dict[str, Any]:
 		"""
@@ -89,5 +97,18 @@ class RegoDataBuilder:
 				'parameters': policy.privacy.parameters,
 				'reason_code': policy.privacy.reason.winning_source_id,
 			}
+
+		# 6. Validate
+		# Ensure the bundle adheres to the schema expected by the Rego policies
+		validation_result = self._validator.validate(bundle)
+
+		if not validation_result.is_valid:
+			error_msg = '; '.join(validation_result.errors)
+			logger.error(f'Generated OPA Data Bundle for {policy.resource_urn} is invalid: {error_msg}')
+			raise ValueError(f'OPA Generation Failed: {error_msg}')
+
+		# Log warnings if any (e.g., empty bundle)
+		for warn in validation_result.warnings:
+			logger.warning(f'OPA Generation Warning for {policy.resource_urn}: {warn}')
 
 		return bundle
