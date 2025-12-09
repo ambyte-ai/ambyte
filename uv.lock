@@ -146,7 +146,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ambyte-compiler", virtual = "apps/policy_compiler" },
+    { name = "ambyte-compiler", editable = "apps/policy_compiler" },
     { name = "ambyte-sdk", editable = "packages/python-sdk" },
     { name = "rich", specifier = ">=14.2.0" },
     { name = "typer", specifier = ">=0.20.0" },
@@ -155,7 +155,7 @@ requires-dist = [
 [[package]]
 name = "ambyte-compiler"
 version = "0.1.0"
-source = { virtual = "apps/policy_compiler" }
+source = { editable = "apps/policy_compiler" }
 dependencies = [
     { name = "ambyte-rules" },
     { name = "ambyte-schemas" },
@@ -266,7 +266,7 @@ dev = [
 requires-dist = [
     { name = "ambyte-audit", virtual = "apps/audit-log" },
     { name = "ambyte-cli", editable = "apps/cli" },
-    { name = "ambyte-compiler", virtual = "apps/policy_compiler" },
+    { name = "ambyte-compiler", editable = "apps/policy_compiler" },
     { name = "ambyte-connectors", editable = "connectors/python-common" },
     { name = "ambyte-control-plane", virtual = "apps/control-plane-api" },
     { name = "ambyte-ingest", virtual = "apps/ingest-worker" },

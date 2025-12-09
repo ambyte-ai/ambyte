@@ -2,7 +2,7 @@ import re
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import yaml
 from ambyte_cli.config import AmbyteConfig
@@ -91,8 +91,8 @@ class ObligationLoader:
 
 			# 4. Construct Final Object
 			return Obligation(
-				id=str(raw.get('id')),
-				title=str(raw.get('title')),
+				id=cast(str, raw.get('id')),
+				title=cast(str, raw.get('title')),
 				description=str(raw.get('description', '')),
 				provenance=provenance,
 				enforcement_level=enf_level,
@@ -167,12 +167,19 @@ class ObligationLoader:
 		if norm_val in enum_cls.__members__:
 			return enum_cls[norm_val]
 
-		# Suffix match ("BLOCKING" -> "ENFORCEMENT_LEVEL_BLOCKING")
+		# Fuzzy match
 		for member_name, member in enum_cls.__members__.items():
-			if member_name.endswith(f'_{norm_val}') or member_name == norm_val:
+			# 1. Suffix match (Input is SHORT, Enum is LONG)
+			# e.g. Input: "BLOCKING" matches Enum: "ENFORCEMENT_LEVEL_BLOCKING"
+			if member_name.endswith(f'_{norm_val}'):
 				return member
 
-		valid_options = [m.split('_')[-1] for m in enum_cls.__members__.keys()]
+			# 2. Reverse match (Input is LONG, Enum is SHORT)
+			# e.g. Input: "ENFORCEMENT_LEVEL_AUDIT_ONLY" matches Enum: "AUDIT_ONLY"
+			if norm_val.endswith(f'_{member_name}'):
+				return member
+
+		valid_options = list(enum_cls.__members__.keys())
 		raise ValueError(f"Invalid value '{value}' for {enum_cls.__name__}. Valid options: {valid_options}")
 
 	def _parse_duration(self, val: str) -> timedelta:
