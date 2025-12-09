@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import yaml
 from ambyte_cli.ui.console import console
@@ -14,6 +15,7 @@ class ResourceItem(AmbyteBaseModel):
 	urn: str = Field(..., description='The Unique Resource Name.')
 	tags: dict[str, str] = Field(default_factory=dict, description='Metadata tags used for policy targeting.')
 	description: str | None = None
+	config: dict[str, Any] = Field(default_factory=dict)
 
 
 class ResourceInventory(AmbyteBaseModel):

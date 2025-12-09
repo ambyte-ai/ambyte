@@ -2,6 +2,7 @@
 Core logic commands: resolve, build, and diff.
 """
 
+import importlib.util
 import json
 import logging
 import shutil
@@ -134,7 +135,7 @@ def build(clean: bool = typer.Option(False, '--clean', help='Clear existing arti
 			# Load Inventory (resources.yaml)
 			# Convert Pydantic models to list of dicts for the compiler service
 			inventory_models = inv_loader.load()
-			resources = [{'urn': r.urn, 'tags': r.tags} for r in inventory_models]
+			resources = [{'urn': r.urn, 'tags': r.tags, 'config': r.config} for r in inventory_models]
 
 			if not obligations:
 				console.print('[yellow]No obligations found. Nothing to build.[/yellow]')
@@ -142,7 +143,7 @@ def build(clean: bool = typer.Option(False, '--clean', help='Clear existing arti
 
 			if not resources:
 				console.print('[yellow]No resources found in inventory. Using default wildcard context.[/yellow]')
-				resources = [{'urn': 'urn:local:default', 'tags': {}}]
+				resources = [{'urn': 'urn:local:default', 'tags': {}, 'config': {}}]
 
 		# 3. Initialize Compiler Service
 		template_path = _get_template_path()
@@ -165,8 +166,7 @@ def build(clean: bool = typer.Option(False, '--clean', help='Clear existing arti
 
 		# --- Target: AWS IAM ---
 		if TargetPlatform.AWS_IAM in config.targets:
-			# Placeholder for IAM build loop # TODO
-			pass
+			_build_iam(compiler, resources, obligations, out_dir)
 
 		console.print(f'\n✅ Build complete! Artifacts in [green]{out_dir}[/green]')
 
@@ -280,20 +280,29 @@ def _build_local(compiler: PolicyCompilerService, resources: list[dict], obligat
 def _build_snowflake(compiler: PolicyCompilerService, resources: list[dict], obligations: list, out_dir: Path):
 	"""
 	Generates masking policy SQL.
-	Iterates through inventory and concatenates all SQL into one file.
+	Merges resource-specific config with defaults.
 	"""
 	console.print('  • Generating [bold]Snowflake SQL[/bold]...', end='')
 
-	# Context defaults (would normally come from config per-resource) # TODO
-	ctx = {'input_type': 'VARCHAR', 'allowed_roles': ['ADMIN', 'PII_READER']}
+	# Global Defaults
+	default_ctx = {'input_type': 'VARCHAR', 'allowed_roles': ['ADMIN', 'PII_READER']}
 
 	all_sql = []
 
 	for res in resources:
-		# Check if this resource is relevant for Snowflake (heuristic or type check)
 		urn = res['urn']
+
+		# Simple heuristic filter
 		if 'snowflake' not in urn and 'db' not in urn:
 			continue
+
+		# 1. Merge Config
+		# Priority: Resource Config > Default
+		res_config = res.get('config', {}).get('snowflake', {})
+
+		# Shallow merge
+		ctx = default_ctx.copy()
+		ctx.update(res_config)
 
 		try:
 			# Pass single resource list
@@ -335,6 +344,55 @@ def _build_opa(compiler: PolicyCompilerService, resources: list[dict], obligatio
 	console.print(' [green]Done[/green]')
 
 
+def _build_iam(compiler: PolicyCompilerService, resources: list[dict], obligations: list, out_dir: Path):
+	"""
+	Generates AWS IAM Policy JSONs.
+	Creates one file per resource (e.g., iam_my-bucket.json).
+	"""
+	console.print('  • Generating [bold]AWS IAM Policies[/bold]...', end='')
+
+	generated_count = 0
+
+	for res in resources:
+		urn = str(res['urn'])
+		# Filter: Only process AWS-looking URNs
+		if 'aws' not in urn and not urn.startswith('arn:'):
+			continue
+
+		try:
+			# Determine Policy Type: Resource (Bucket) vs Identity (Guardrail)
+			policy_type = 'identity'
+			if ':s3:::' in urn:
+				policy_type = 'resource'
+
+			ctx = {
+				'resource_arn': urn,  # We use the URN as the ARN for CLI context
+				'iam_policy_type': policy_type,
+			}
+
+			# Compile
+			policy_json = compiler.compile(resources=[res], obligations=obligations, target='aws_iam', context=ctx)
+
+			# Validate output isn't empty wrapper
+			if not policy_json:
+				continue
+
+			# Clean filename: arn:aws:s3:::my-bucket -> iam_my-bucket.json
+			# arn:aws:iam::123:role/MyRole -> iam_MyRole.json
+			safe_name = urn.split(':')[-1].replace('/', '_')
+			filename = f'iam_{safe_name}.json'
+
+			with open(out_dir / filename, 'w', encoding='utf-8') as f:
+				f.write(str(policy_json))
+
+			generated_count += 1
+
+		except Exception as e:
+			logger.warning(f'Failed to generate IAM policy for {urn}: {e}')
+
+	console.print(f' [green]Done ({generated_count} files)[/green]')
+
+
 def _get_template_path() -> Path:
 	"""
 	Locates the SQL templates directory.
@@ -356,7 +414,20 @@ def _get_template_path() -> Path:
 		if candidate.exists():
 			return candidate
 
-		# 3. Installed package path (TODO: Use pkg_resources)
+		# 3. Installed package path (Pip Install)
+		# Checks if templates are bundled inside ambyte_cli
+		spec = importlib.util.find_spec('ambyte_cli')
+		if spec and spec.origin:
+			package_root = Path(spec.origin).parent
+			# Standard bundling: ambyte_cli/templates/sql_templates
+			candidate = package_root / 'templates' / 'sql_templates'
+			if candidate.exists():
+				return candidate
+
+			# Fallback for some editable installs or flat layouts
+			candidate = package_root / 'sql_templates'
+			if candidate.exists():
+				return candidate
 
 	except Exception:
 		logger.warning('Failed to locate template path, falling back to default.', exc_info=True)

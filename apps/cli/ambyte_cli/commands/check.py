@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import typer
-from ambyte_cli.config import load_config, get_workspace_root
+from ambyte_cli.config import get_workspace_root, load_config
 from ambyte_cli.services.inventory import InventoryLoader
 from ambyte_cli.services.loader import ObligationLoader
 from ambyte_cli.ui.console import console
