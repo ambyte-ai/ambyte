@@ -3,10 +3,12 @@ Debug commands for simulating policy enforcement.
 """
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 import typer
-from ambyte_cli.config import load_config
+from ambyte_cli.config import load_config, get_workspace_root
+from ambyte_cli.services.inventory import InventoryLoader
 from ambyte_cli.services.loader import ObligationLoader
 from ambyte_cli.ui.console import console
 from ambyte_rules.engine import ConflictResolutionEngine
@@ -16,57 +18,94 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
+from apps.policy_compiler.ambyte_compiler.matcher import ResourceMatcher
+
+
+def _load_resource_tags(urn: str) -> dict[str, str]:
+	"""
+	Helper to find static tags for a specific URN from the resources.yaml inventory.
+	"""
+	try:
+		root = get_workspace_root()
+		inv_loader = InventoryLoader(root)
+		# InventoryLoader handles missing files gracefully
+		resources = inv_loader.load()
+
+		for r in resources:
+			if r.urn == urn:
+				return r.tags
+
+		# Not found in inventory
+		return {}
+	except Exception:
+		# If inventory logic fails, proceed with empty tags (Global matches only)
+		return {}
+
 
 def check(
 	resource: str = typer.Option(..., '--resource', '-r', help='The URN of the resource to access.'),
 	action: str = typer.Option(..., '--action', '-a', help='The action to perform (e.g. read, train, query).'),
 	actor: str = typer.Option('anonymous', '--actor', help='The ID of the user/service performing the action.'),
 	context: str = typer.Option(
-		'{}', '--context', '-c', help='JSON string of context variables (e.g. \'{"region": "US"}\').'
+		'{}', '--context', '-c', help='JSON string of runtime context variables (e.g. \'{"region": "US"}\').'
 	),
 	verbose: bool = typer.Option(False, '--verbose', '-v', help='Show detailed decision logic.'),
 ):
 	"""
 	Simulate a permission check: "Can Actor X do Action Y on Resource Z?"
 
-	This command compiles obligations on-the-fly and evaluates them against
-	the provided context attributes to determine if access would be ALLOWED or DENIED.
+	This command:
+	1. Loads local Obligations.
+	2. Loads Resource Tags from inventory (resources.yaml).
+	3. Matches Obligations to Resource.
+	4. Resolves conflicts.
+	5. Evaluates the Effective Policy against the provided runtime context.
 	"""
 	try:
 		# 1. Parse Inputs
 		try:
-			ctx_dict = json.loads(context)
+			runtime_ctx = json.loads(context)
 		except json.JSONDecodeError as e:
 			console.print('[bold red]Error:[/bold red] --context must be valid JSON.')
 			raise typer.Exit(1) from e
 
-		# 2. Load & Resolve Policy
-		# We perform an "On-the-fly" resolution to ensure we are checking
-		# the latest local state of the obligations.
+		# 2. Load Environment
 		config = load_config()
 		loader = ObligationLoader(config)
 
 		with console.status('[dim]Compiling policies...[/dim]'):
-			obligations = loader.load_all()
-			if not obligations:
+			# A. Load All Raw Obligations
+			all_obligations = loader.load_all()
+			if not all_obligations:
 				console.print('[yellow]No obligations defined. Defaulting to ALLOW (Open).[/yellow]')
 				_print_result(True, 'No constraints found.')
 				return
 
+			# B. Load Resource Metadata (Tags)
+			resource_tags = _load_resource_tags(resource)
+			if resource_tags:
+				console.print(f'[dim]Applied tags from inventory: {resource_tags}[/dim]')
+			else:
+				console.print(f'[dim]No inventory tags found for {resource}. Only matching global (*) policies.[/dim]')
+
+			# C. Match Applicable Obligations
+			matcher = ResourceMatcher()
+			applicable_obligations = [ob for ob in all_obligations if matcher.matches(resource, resource_tags, ob)]
+
+			# D. Resolve Conflicts
 			engine = ConflictResolutionEngine()
-			# In a real scenario, we'd filter obligations by resource tags first.
-			# Here we assume all loaded policies apply to the target URN for the MVP. #TODO
-			policy = engine.resolve(resource, obligations)
+			policy = engine.resolve(resource, applicable_obligations)
 
 		# 3. Simulate Enforcement
+		# The Simulator uses the policy (WHAT rules apply) and the runtime_ctx (WHAT is happening now)
 		simulator = PolicySimulator(policy)
-		allowed, reason = simulator.evaluate(action, actor, ctx_dict)
+		allowed, reason = simulator.evaluate(action, actor, runtime_ctx)
 
 		# 4. Output Result
 		_print_result(allowed, reason)
 
 		if verbose or not allowed:
-			_print_trace(policy, action, ctx_dict, reason)
+			_print_trace(policy, action, runtime_ctx, reason, len(applicable_obligations))
 
 	except Exception as e:
 		console.print(f'[bold red]Check failed:[/bold red] {e}')
@@ -77,7 +116,7 @@ def why(
 	resource: str = typer.Option(..., '--resource', '-r', help='The URN of the resource.'),
 	action: str = typer.Option(None, '--action', '-a', help='Optional: The action being attempted.'),
 	context: str = typer.Option(
-		'{}', '--context', '-c', help='JSON string of context variables (e.g. \'{"region": "US"}\').'
+		'{}', '--context', '-c', help='JSON string of runtime context variables (e.g. \'{"region": "US"}\').'
 	),
 ):
 	"""
@@ -89,7 +128,7 @@ def why(
 	try:
 		# 1. Parse Context
 		try:
-			ctx_dict = json.loads(context)
+			runtime_ctx = json.loads(context)
 		except json.JSONDecodeError:
 			console.print('[bold red]Error:[/bold red] --context must be valid JSON.')
 			raise typer.Exit(1) from None
@@ -99,19 +138,24 @@ def why(
 		loader = ObligationLoader(config)
 
 		with console.status('[dim]Tracing policy lineage...[/dim]'):
-			obligations = loader.load_all()
-			if not obligations:
+			all_obligations = loader.load_all()
+			if not all_obligations:
 				console.print('[yellow]No obligations found. Policy is open by default.[/yellow]')
 				return
 
+			# Inventory Lookup & Matching
+			resource_tags = _load_resource_tags(resource)
+			matcher = ResourceMatcher()
+			applicable_obligations = [ob for ob in all_obligations if matcher.matches(resource, resource_tags, ob)]
+
 			engine = ConflictResolutionEngine()
-			policy = engine.resolve(resource, obligations)
+			policy = engine.resolve(resource, applicable_obligations)
 
 		# 3. Analyze Traces
 		if action:
-			_explain_specific_action(policy, action, ctx_dict)
+			_explain_specific_action(policy, action, runtime_ctx)
 		else:
-			_explain_general_policy(policy)
+			_explain_general_policy(policy, len(applicable_obligations))
 
 	except Exception as e:
 		console.print(f'[bold red]Trace failed:[/bold red] {e}')
@@ -145,16 +189,13 @@ def _explain_specific_action(policy: ResolvedPolicy, action: str, context: dict[
 		)
 		# Even if allowed, show what rules apply
 		console.print('\n[dim]Governing policies that were checked:[/dim]')
-		_explain_general_policy(policy)
+		_explain_general_policy(policy, len(policy.contributing_obligation_ids))
 		return
 
 	# If Denied, find the specific trace
 	trace: ConflictTrace | None = None
 
 	# Heuristic matching of failure reason text to policy sections
-	# (In a real system, the Simulator would return the Trace object directly,
-	# but for CLI we inspect the resolved policy based on the logic we know failed). # TODO
-
 	act = action.lower()
 
 	# 1. Check AI Blockers
@@ -184,7 +225,13 @@ def _explain_specific_action(policy: ResolvedPolicy, action: str, context: dict[
 		elif purpose and policy.purpose.allowed_purposes and purpose not in policy.purpose.allowed_purposes:
 			trace = policy.purpose.reason
 
-	# 3. Render the Evidence
+	# 4. Check Retention Blockers (Expiration)
+	if not trace and policy.retention and not policy.retention.is_indefinite:
+		# Check if "expired" is in the reason text returned by simulator
+		if 'expired' in fail_reason_text.lower():
+			trace = policy.retention.reason
+
+	# 5. Render the Evidence
 	if trace:
 		_print_trace_evidence(trace, '⛔ BLOCKING SOURCE')
 	else:
@@ -192,11 +239,13 @@ def _explain_specific_action(policy: ResolvedPolicy, action: str, context: dict[
 		console.print(f'[bold red]Denied:[/bold red] {fail_reason_text}')
 
 
-def _explain_general_policy(policy: ResolvedPolicy):
+def _explain_general_policy(policy: ResolvedPolicy, matched_count: int):
 	"""
 	Lists all active constraints and their sources.
 	"""
-	if not (policy.retention or policy.geofencing or policy.ai_rules):
+	console.print(f'[dim]Matched {matched_count} obligations based on inventory tags/patterns.[/dim]')
+
+	if not (policy.retention or policy.geofencing or policy.ai_rules or policy.purpose or policy.privacy):
 		console.print('[dim]No active constraints on this resource.[/dim]')
 		return
 
@@ -338,10 +387,50 @@ class PolicySimulator:
 			method_name = self.policy.privacy.method.name
 			return True, f'Allowed, subject to privacy transformation: {method_name}'
 
-		# 5. Retention Check (Primitive)
-		# If action is "access" or "read", usually allowed unless expired.
-		# But for CLI check, we don't know the data age easily.
-		# We assume ALLOW unless specifically blocked above. # TODO
+		# 5. Retention Check
+		if self.policy.retention:
+			ret = self.policy.retention
+			if ret.is_indefinite:
+				# Legal Hold active -> Data is preserved regardless of age.
+				# However, if the action was 'delete', we might want to block it.
+				if 'delete' in action.lower():
+					return False, f"Deletion blocked by Legal Hold (Source: '{ret.reason.winning_source_id}')."
+			else:
+				# Look for creation date in context
+				created_val = None
+				for k in ['created_at', 'creation_date', 'date']:
+					if k in context:
+						created_val = context[k]
+						break
+
+				if created_val:
+					try:
+						# Try ISO format
+						if isinstance(created_val, str):
+							dt = datetime.fromisoformat(created_val)
+						else:
+							# Assume datetime object if somehow passed (unlikely in CLI)
+							dt = created_val
+
+						# Ensure UTC for math
+						if dt.tzinfo is None:
+							dt = dt.replace(tzinfo=timezone.utc)
+
+						age = datetime.now(timezone.utc) - dt
+
+						if age > ret.duration:
+							return (
+								False,
+								f'Data is expired (Age: {age.days}d > Retention: {ret.duration.days}d). '
+								f"Obligation: '{ret.reason.winning_source_id}'.",
+							)
+					except ValueError:
+						# Malformed date, warn via return message but allow (Fail Open logic for CLI)
+						return True, 'Retention check skipped (Invalid date format in context).'
+				else:
+					# Metadata missing
+					# We return True but modify reason to indicate skip
+					return True, "Retention check skipped (Missing 'created_at' in context)."
 
 		# Default: Allow
 		return True, 'No blocking policies triggered.'
@@ -359,7 +448,7 @@ def _print_result(allowed: bool, reason: str):
 		console.print(Panel(f'[bold red]❌ DENIED[/bold red]\n[white]{reason}[/white]', border_style='red'))
 
 
-def _print_trace(policy: ResolvedPolicy, action: str, context: dict, final_reason: str):
+def _print_trace(policy: ResolvedPolicy, action: str, context: dict, final_reason: str, matched_count: int):
 	"""
 	Prints a tree view of what was checked.
 	"""
@@ -373,6 +462,7 @@ def _print_trace(policy: ResolvedPolicy, action: str, context: dict, final_reaso
 
 	# Policy Node
 	pol_node = tree.add(f'Policy: [cyan]{policy.resource_urn}[/cyan]')
+	pol_node.add(f'[dim](Derived from {matched_count} applicable obligations)[/dim]')
 
 	if policy.ai_rules:
 		ai_node = pol_node.add('AI Rules')
@@ -414,6 +504,15 @@ def _print_trace(policy: ResolvedPolicy, action: str, context: dict, final_reaso
 				pur_node.add(f'Purpose {purpose}: [green]Pass[/green]')
 		else:
 			pur_node.add('[dim]Purpose not provided in context.[/dim]')
+
+	if policy.retention:
+		ret_node = pol_node.add('Retention')
+		if policy.retention.is_indefinite:
+			ret_node.add(f'[yellow]Legal Hold Active[/yellow] (Source: {policy.retention.reason.winning_source_id})')
+		elif 'expired' in final_reason.lower():
+			ret_node.add(f'[red]Data Expired[/red] (Source: {policy.retention.reason.winning_source_id})')
+		else:
+			ret_node.add(f'Duration: {policy.retention.duration}. [green]Valid[/green]')
 
 	if policy.privacy:
 		pol_node.add(f'Privacy: [magenta]{policy.privacy.method.name}[/magenta] enforced.')
