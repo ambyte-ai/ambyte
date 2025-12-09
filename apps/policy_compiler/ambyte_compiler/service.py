@@ -5,14 +5,14 @@ from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ResolvedPolicy
 from ambyte_schemas.models.obligation import Obligation, PrivacyMethod
 
-from apps.policy_compiler.ambyte_compiler.generators import (
+from ambyte_compiler.generators import (
 	IamPolicyBuilder,
 	LocalPythonGenerator,
 	RegoDataBuilder,
 	S3BucketPolicyGenerator,
 	SnowflakeGenerator,
 )
-from apps.policy_compiler.ambyte_compiler.matcher import ResourceMatcher
+from ambyte_compiler.matcher import ResourceMatcher
 
 TargetPlatform = Literal['snowflake', 'opa', 'aws_iam', 'local']
 

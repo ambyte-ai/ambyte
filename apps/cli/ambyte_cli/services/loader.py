@@ -1,5 +1,6 @@
 import re
 from datetime import timedelta
+from enum import Enum
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -20,7 +21,7 @@ from ambyte_schemas.models.obligation import (
 )
 from pydantic import ValidationError
 
-T = TypeVar('T')
+T = TypeVar('T', bound=Enum)
 
 
 class PolicyLoaderError(Exception):

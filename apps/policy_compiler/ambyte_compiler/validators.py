@@ -2,7 +2,7 @@ import json
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Union
+from typing import Any
 
 import sqlparse
 from ambyte_schemas.models.artifact import PolicyBundle
@@ -33,7 +33,7 @@ class ArtifactValidator(ABC):
 	"""
 
 	@abstractmethod
-	def validate(self, artifact: Union[str, dict[str, Any]]) -> ValidationResult:
+	def validate(self, artifact: str | dict[str, Any]) -> ValidationResult:
 		"""
 		Validates the generated artifact.
 
@@ -63,7 +63,7 @@ class SnowflakeSqlValidator(ArtifactValidator):
 
 	DANGEROUS_KEYWORDS = ['DROP TABLE', 'DROP DATABASE', 'GRANT ACCOUNTADMIN', 'DELETE FROM']
 
-	def validate(self, artifact: Union[str, dict]) -> ValidationResult:
+	def validate(self, artifact: str | dict) -> ValidationResult:
 		result = ValidationResult(is_valid=True)
 
 		# SQL should be a string
@@ -130,7 +130,7 @@ class IamJsonValidator(ArtifactValidator):
 
 	SID_REGEX = re.compile(r'^[a-zA-Z0-9]+$')
 
-	def validate(self, artifact: Union[str, dict]) -> ValidationResult:
+	def validate(self, artifact: str | dict) -> ValidationResult:
 		result = ValidationResult(is_valid=True)
 
 		# 1. Parse JSON
@@ -185,7 +185,7 @@ class OpaDataValidator(ArtifactValidator):
 	Validates the Data Dictionary generated for OPA.
 	"""
 
-	def validate(self, artifact: Union[str, dict]) -> ValidationResult:
+	def validate(self, artifact: str | dict) -> ValidationResult:
 		result = ValidationResult(is_valid=True)
 
 		try:
@@ -221,7 +221,7 @@ class LocalBundleValidator(ArtifactValidator):
 	back into the official Pydantic Schema.
 	"""
 
-	def validate(self, artifact: Union[str, dict]) -> ValidationResult:
+	def validate(self, artifact: str | dict) -> ValidationResult:
 		result = ValidationResult(is_valid=True)
 
 		json_str = json.dumps(artifact) if isinstance(artifact, dict) else str(artifact)

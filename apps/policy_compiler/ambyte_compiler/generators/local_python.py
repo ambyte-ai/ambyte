@@ -1,11 +1,10 @@
 import logging
 from importlib import metadata
-from typing import Optional
 
 from ambyte_rules.models import ResolvedPolicy
 from ambyte_schemas.models.artifact import BuildMetadata, PolicyBundle
 
-from apps.policy_compiler.ambyte_compiler.validators import LocalBundleValidator
+from ambyte_compiler.validators import LocalBundleValidator
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ class LocalPythonGenerator:
 		self,
 		policies: list[ResolvedPolicy],
 		project_name: str = 'unknown',
-		git_hash: Optional[str] = None,
+		git_hash: str | None = None,
 	) -> str:
 		"""
 		Creates the 'local_policies.json' content.

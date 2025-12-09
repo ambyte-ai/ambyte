@@ -1,7 +1,7 @@
 import pytest
 from ambyte_schemas.models.obligation import PrivacyMethod
 
-from apps.policy_compiler.ambyte_compiler.generators.snowflake_sql import SnowflakeGenerator
+from ambyte_compiler.generators.snowflake_sql import SnowflakeGenerator
 
 # ==============================================================================
 # FIXTURES

@@ -3,6 +3,8 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from ambyte_compiler.diff_engine.service import SemanticDiffEngine
+from ambyte_compiler.service import PolicyCompilerService
 from ambyte_schemas.models.obligation import (
 	AiModelConstraint,
 	EnforcementLevel,
@@ -15,9 +17,6 @@ from ambyte_schemas.models.obligation import (
 	RetentionTrigger,
 	SourceProvenance,
 )
-
-from apps.policy_compiler.ambyte_compiler.diff_engine.service import SemanticDiffEngine
-from apps.policy_compiler.ambyte_compiler.service import PolicyCompilerService
 
 # ------------------------------------------------------------------------------
 # Fixtures & Helpers

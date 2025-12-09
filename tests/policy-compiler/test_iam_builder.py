@@ -1,5 +1,6 @@
 import json
 
+from ambyte_compiler.generators.iam_builder import IamPolicyBuilder
 from ambyte_rules.models import (
 	ConflictTrace,
 	EffectiveAiRules,
@@ -7,8 +8,6 @@ from ambyte_rules.models import (
 	EffectiveRetention,
 	ResolvedPolicy,
 )
-
-from apps.policy_compiler.ambyte_compiler.generators.iam_builder import IamPolicyBuilder
 
 # ==============================================================================
 # HELPERS

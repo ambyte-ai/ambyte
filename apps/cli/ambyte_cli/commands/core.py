@@ -25,10 +25,10 @@ from ambyte_rules.engine import ConflictResolutionEngine
 from rich.panel import Panel
 from rich.table import Table
 
-from apps.policy_compiler.ambyte_compiler.diff_engine.models import ChangeImpact
-from apps.policy_compiler.ambyte_compiler.diff_engine.service import SemanticDiffEngine
-from apps.policy_compiler.ambyte_compiler.matcher import ResourceMatcher
-from apps.policy_compiler.ambyte_compiler.service import PolicyCompilerService
+from ambyte_compiler.diff_engine.models import ChangeImpact
+from ambyte_compiler.diff_engine.service import SemanticDiffEngine
+from ambyte_compiler.matcher import ResourceMatcher
+from ambyte_compiler.service import PolicyCompilerService
 
 logger = logging.getLogger(__name__)
 
@@ -365,7 +365,7 @@ def _build_iam(compiler: PolicyCompilerService, resources: list[dict], obligatio
 			if ':s3:::' in urn:
 				policy_type = 'resource'
 
-			ctx = {
+			ctx: dict[str, str | list[str]] = {
 				'resource_arn': urn,  # We use the URN as the ARN for CLI context
 				'iam_policy_type': policy_type,
 			}

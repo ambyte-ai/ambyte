@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from ambyte_compiler.generators.rego_builder import RegoDataBuilder
 from ambyte_rules.models import (
 	ConflictTrace,
 	EffectiveAiRules,
@@ -7,8 +8,6 @@ from ambyte_rules.models import (
 	EffectiveRetention,
 	ResolvedPolicy,
 )
-
-from apps.policy_compiler.ambyte_compiler.generators.rego_builder import RegoDataBuilder
 
 # ==============================================================================
 # HELPERS

@@ -4,7 +4,7 @@ from typing import Any
 
 from ambyte_rules.models import ResolvedPolicy
 
-from apps.policy_compiler.ambyte_compiler.validators import OpaDataValidator
+from ambyte_compiler.validators import OpaDataValidator
 
 logger = logging.getLogger(__name__)
 

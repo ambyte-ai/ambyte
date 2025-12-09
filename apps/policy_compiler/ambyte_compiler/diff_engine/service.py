@@ -1,5 +1,11 @@
 from typing import Any
 
+from ambyte_compiler.diff_engine.models import (
+	ChangeImpact,
+	ChangeType,
+	DiffItem,
+	PolicyDiffReport,
+)
 from ambyte_rules.models import (
 	EffectiveAiRules,
 	EffectiveGeofencing,
@@ -7,13 +13,6 @@ from ambyte_rules.models import (
 	EffectivePurpose,
 	EffectiveRetention,
 	ResolvedPolicy,
-)
-
-from apps.policy_compiler.ambyte_compiler.diff_engine.models import (
-	ChangeImpact,
-	ChangeType,
-	DiffItem,
-	PolicyDiffReport,
 )
 
 

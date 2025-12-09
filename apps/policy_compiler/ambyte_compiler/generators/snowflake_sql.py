@@ -4,7 +4,7 @@ from pathlib import Path
 from ambyte_schemas.models.obligation import PrivacyMethod
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
-from apps.policy_compiler.ambyte_compiler.validators import SnowflakeSqlValidator
+from ambyte_compiler.validators import SnowflakeSqlValidator
 
 logger = logging.getLogger(__name__)
 

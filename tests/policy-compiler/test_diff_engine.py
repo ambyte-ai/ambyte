@@ -1,9 +1,8 @@
 from datetime import timedelta
 
+from ambyte_compiler.diff_engine.models import ChangeImpact, ChangeType
+from ambyte_compiler.diff_engine.service import SemanticDiffEngine
 from ambyte_rules.models import ConflictTrace, EffectiveAiRules, EffectiveGeofencing, EffectiveRetention, ResolvedPolicy
-
-from apps.policy_compiler.ambyte_compiler.diff_engine.models import ChangeImpact, ChangeType
-from apps.policy_compiler.ambyte_compiler.diff_engine.service import SemanticDiffEngine
 
 
 def make_trace():

@@ -4,7 +4,7 @@ from typing import Any
 
 from ambyte_rules.models import ResolvedPolicy
 
-from apps.policy_compiler.ambyte_compiler.validators import IamJsonValidator
+from ambyte_compiler.validators import IamJsonValidator
 
 logger = logging.getLogger(__name__)
 

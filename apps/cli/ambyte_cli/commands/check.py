@@ -18,7 +18,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
-from apps.policy_compiler.ambyte_compiler.matcher import ResourceMatcher
+from ambyte_compiler.matcher import ResourceMatcher
 
 
 def _load_resource_tags(urn: str) -> dict[str, str]:

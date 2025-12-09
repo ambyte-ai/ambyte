@@ -98,7 +98,7 @@ def init(
 	if not non_interactive:
 		if Confirm.ask('Do you want to generate SQL policies for Snowflake?'):
 			targets.append(TargetPlatform.SNOWFLAKE)
-		# We could add more prompts for OPA/IAM here, but let's keep it simple.
+		# We could add more prompts for OPA/IAM here, but let's keep it simple. # TODO
 
 	# 3. Create Configuration Object
 	config = AmbyteConfig(project_name=project_name, targets=targets)
@@ -127,13 +127,17 @@ def init(
 			console.print(f'✅ Created sample obligation: [green]{config.policies_dir}/gdpr_sample.yaml[/green]')
 
 		# 7. Create Sample Inventory
+		if not resources_dir.exists():
+			resources_dir.mkdir(parents=True)
+			console.print(f'✅ Created [green]{config.resources_dir}/[/green]')
+
 		resource_path = resources_dir / 'resources.yaml'
 		if not resource_path.exists():
 			with open(resource_path, 'w', encoding='utf-8') as f:
 				f.write(SAMPLE_RESOURCES_YAML)
 			console.print(f'✅ Created sample inventory: [green]{config.resources_dir}/resources.yaml[/green]')
 
-		# 7. Success Message
+		# 8. Success Message
 		console.print('\n[bold green]Workspace initialized successfully![/bold green]')
 		console.print('Next steps:')
 		console.print(f'  1. Review the sample policy: [cyan]cat {config.policies_dir}/gdpr_sample.yaml[/cyan]')
