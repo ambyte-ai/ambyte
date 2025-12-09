@@ -8,14 +8,13 @@ from typing import Any
 import typer
 from ambyte_cli.config import load_config
 from ambyte_cli.services.loader import ObligationLoader
+from ambyte_cli.ui.console import console
 from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ConflictTrace, ResolvedPolicy
-from rich.console import Console, Group
+from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
-
-console = Console()
 
 
 def check(

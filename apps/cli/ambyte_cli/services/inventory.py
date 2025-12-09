@@ -1,11 +1,9 @@
 from pathlib import Path
 
 import yaml
+from ambyte_cli.ui.console import console
 from ambyte_schemas.models.common import AmbyteBaseModel
 from pydantic import Field, ValidationError
-from rich.console import Console
-
-console = Console()
 
 
 class ResourceItem(AmbyteBaseModel):

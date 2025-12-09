@@ -5,6 +5,7 @@ from typing import Any, TypeVar
 
 import yaml
 from ambyte_cli.config import AmbyteConfig
+from ambyte_cli.ui.console import console
 from ambyte_schemas.models.obligation import (
 	AiModelConstraint,
 	EnforcementLevel,
@@ -18,9 +19,6 @@ from ambyte_schemas.models.obligation import (
 	SourceProvenance,
 )
 from pydantic import ValidationError
-from rich.console import Console
-
-console = Console()
 
 T = TypeVar('T')
 

@@ -6,21 +6,16 @@ The main entry point for the Ambyte CLI.
 import logging
 
 import typer
-from rich.console import Console
 from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback
 
-# We assume these modules will be created in the 'commands' directory
-# as per the implementation plan.
 from ambyte_cli.commands import check, cloud, core, project
+from ambyte_cli.ui.console import console
 
 # 1. Configure Global Rich Behavior
 # ------------------------------------------------------------------------------
 # Install Rich traceback handler so crashes are readable and syntax-highlighted.
 install_rich_traceback(show_locals=False)
-
-# Global console instance for printing (singleton-ish)
-console = Console()
 
 
 # 2. Define the Main Typer Application
