@@ -30,11 +30,12 @@ class S3BucketPolicyGenerator:
 		if not resource_arn.startswith('arn:aws:s3:::'):
 			raise ValueError(f"Invalid S3 ARN: '{resource_arn}'. Must start with 'arn:aws:s3:::'.")
 
-		# bucket_arn = "arn:aws:s3:::bucket"
-		# object_arn = "arn:aws:s3:::bucket/*"
-		bucket_arn = resource_arn
 		# Handle cases where input might already have /* or /
+		# rstrip is character-based, so it handles "/*" and "/" variations
 		base_arn = resource_arn.rstrip('/*').rstrip('/')
+
+		# Define normalized resources
+		bucket_arn = base_arn
 		object_arn = f'{base_arn}/*'
 
 		statements: list[dict[str, Any]] = []
