@@ -1,4 +1,3 @@
-import json
 import os
 from unittest import mock
 
@@ -6,6 +5,8 @@ import pytest
 from ambyte.config import reset_config
 from ambyte.context import context as ambyte_context_manager
 from ambyte.core.decision import DecisionEngine
+from ambyte_rules.models import ConflictTrace, EffectiveGeofencing, ResolvedPolicy
+from ambyte_schemas.models.artifact import BuildMetadata, PolicyBundle
 from ambyte_schemas.models.common import Actor, ActorType
 
 
@@ -116,13 +117,30 @@ def test_local_mode_file_loading(tmp_path):
 	"""
 	Verify that LOCAL mode loads policies from a JSON file and bypasses the network.
 	"""
-	# 1. Create a dummy policy file
-	policy_data = {'urn:local:allowed': {'read': 'ALLOW'}, 'urn:local:denied': {'read': 'DENY'}}
+
+	# 1. Construct Valid Policy Objects
+	# Policy A: Allowed (No constraints)
+	policy_allow = ResolvedPolicy(resource_urn='urn:local:allowed')
+
+	# Policy B: Denied (Global Geofencing Ban)
+	trace = ConflictTrace(winning_obligation_id='obl-1', winning_source_id='TEST', description='Blocked for testing')
+	policy_deny = ResolvedPolicy(
+		resource_urn='urn:local:denied', geofencing=EffectiveGeofencing(is_global_ban=True, reason=trace)
+	)
+
+	# 2. Wrap in Bundle
+	bundle = PolicyBundle(
+		metadata=BuildMetadata(compiler_version='test'),
+		policies={'urn:local:allowed': policy_allow, 'urn:local:denied': policy_deny},
+		schema_version='1.0.0',
+	)
+
+	# 3. Write JSON to disk
 	policy_file = tmp_path / 'policy.json'
 	with open(policy_file, 'w', encoding='utf-8') as f:
-		json.dump(policy_data, f)
+		f.write(bundle.model_dump_json())
 
-	# 2. Configure SDK to use it
+	# 4. Configure SDK to use it
 	env_vars = {'AMBYTE_MODE': 'LOCAL', 'AMBYTE_LOCAL_POLICY_PATH': str(policy_file)}
 
 	with mock.patch.dict(os.environ, env_vars):
@@ -132,7 +150,7 @@ def test_local_mode_file_loading(tmp_path):
 		assert engine.check_access('urn:local:allowed', 'read') is True
 
 		# Verify deny logic
-		assert engine.check_access('urn:local:denied', 'read') is False
+		assert engine.check_access('urn:local:denied', 'read', context={'region': 'US'}) is False
 
 		# Verify default deny (unknown resource)
 		assert engine.check_access('urn:unknown', 'read') is False

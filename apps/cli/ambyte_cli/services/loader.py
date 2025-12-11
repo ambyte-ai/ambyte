@@ -84,10 +84,30 @@ class ObligationLoader:
 			enf_level = self._resolve_enum(EnforcementLevel, raw.get('enforcement_level', 'AUDIT_ONLY'))
 
 			# 3. Handle Polymorphic Constraint
-			constraint_data = raw.get('constraint', {})
-			constraint_type = constraint_data.get('type', '').upper()
+			constraint_kwargs = {}
 
-			constraint_kwargs = self._build_constraint_kwargs(constraint_type, constraint_data)
+			# Check for each supported constraint type key at the root level
+			if 'retention' in raw:
+				constraint_kwargs = self._build_constraint_kwargs('RETENTION', raw['retention'])
+			elif 'geofencing' in raw:
+				constraint_kwargs = self._build_constraint_kwargs('GEOFENCING', raw['geofencing'])
+			elif 'purpose' in raw:
+				constraint_kwargs = self._build_constraint_kwargs('PURPOSE_RESTRICTION', raw['purpose'])
+			elif 'privacy' in raw:
+				constraint_kwargs = self._build_constraint_kwargs('PRIVACY_ENHANCEMENT', raw['privacy'])
+			elif 'ai_model' in raw:
+				constraint_kwargs = self._build_constraint_kwargs('AI_MODEL_CONSTRAINT', raw['ai_model'])
+
+			# Fallback for old style (nested 'constraint' block) - Backward compatibility or test compatibility
+			elif 'constraint' in raw:
+				c_data = raw['constraint']
+				c_type = c_data.get('type', '').upper()
+				constraint_kwargs = self._build_constraint_kwargs(c_type, c_data)
+
+			else:
+				pass
+
+			target_data = raw.get('target', {})
 
 			# 4. Construct Final Object
 			return Obligation(
@@ -96,6 +116,7 @@ class ObligationLoader:
 				description=str(raw.get('description', '')),
 				provenance=provenance,
 				enforcement_level=enf_level,
+				target=target_data,
 				**constraint_kwargs,
 			)
 
