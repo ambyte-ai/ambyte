@@ -13,12 +13,12 @@ if sys.platform == 'win32':
 # 1. Import your Configuration (for DB URL)
 from src.core.config import settings
 
-# 2. Import your Base (for Metadata/Table detection)
+# 2. Import ALL models here so Alembic sees them.
+from src.db import models  # noqa: F401
+
+# 3. Import your Base (for Metadata/Table detection)
 from src.db.base import Base
 
-# 3. Import ALL models here so Alembic sees them.
-# Even if you haven't written them yet, keep this section ready.
-# from src.db.models import user, item  # Example TODO
 # ------------------------------------------------------------------------------
 
 # This contains the values from alembic.ini and command line args.
