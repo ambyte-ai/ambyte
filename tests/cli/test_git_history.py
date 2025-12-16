@@ -1,8 +1,8 @@
-import pytest
 import subprocess
-from unittest import mock
 from pathlib import Path
+from unittest import mock
 
+import pytest
 from ambyte_cli.config import AmbyteConfig
 from ambyte_cli.services.git import GitHistoryLoader
 

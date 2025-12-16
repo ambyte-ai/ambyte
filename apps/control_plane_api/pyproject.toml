@@ -1,5 +1,5 @@
 [project]
-name = "ambyte-control-plane"
+name = "ambyte-control-plane-api"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,9 +12,13 @@ dependencies = [
     "psycopg[binary,pool]>=3.2.13"
 ]
 
-[tool.uv]
-package = false
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.uv.sources]
 ambyte-schemas = { workspace = true }
 ambyte-rules = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

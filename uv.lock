@@ -20,7 +20,7 @@ members = [
     "ambyte-cli",
     "ambyte-compiler",
     "ambyte-connectors",
-    "ambyte-control-plane",
+    "ambyte-control-plane-api",
     "ambyte-ingest",
     "ambyte-platform",
     "ambyte-rules",
@@ -187,9 +187,9 @@ requires-dist = [
 ]
 
 [[package]]
-name = "ambyte-control-plane"
+name = "ambyte-control-plane-api"
 version = "0.1.0"
-source = { virtual = "apps/control-plane-api" }
+source = { editable = "apps/control_plane_api" }
 dependencies = [
     { name = "alembic" },
     { name = "ambyte-rules" },
@@ -243,7 +243,7 @@ dependencies = [
     { name = "ambyte-cli" },
     { name = "ambyte-compiler" },
     { name = "ambyte-connectors" },
-    { name = "ambyte-control-plane" },
+    { name = "ambyte-control-plane-api" },
     { name = "ambyte-ingest" },
     { name = "ambyte-rules" },
     { name = "ambyte-schemas" },
@@ -268,7 +268,7 @@ requires-dist = [
     { name = "ambyte-cli", editable = "apps/cli" },
     { name = "ambyte-compiler", editable = "apps/policy_compiler" },
     { name = "ambyte-connectors", editable = "connectors/python-common" },
-    { name = "ambyte-control-plane", virtual = "apps/control-plane-api" },
+    { name = "ambyte-control-plane-api", editable = "apps/control_plane_api" },
     { name = "ambyte-ingest", virtual = "apps/ingest-worker" },
     { name = "ambyte-rules", editable = "packages/rules-engine" },
     { name = "ambyte-schemas", editable = "schemas" },

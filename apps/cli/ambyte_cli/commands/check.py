@@ -11,14 +11,13 @@ from ambyte_cli.config import get_workspace_root, load_config
 from ambyte_cli.services.inventory import InventoryLoader
 from ambyte_cli.services.loader import ObligationLoader
 from ambyte_cli.ui.console import console
+from ambyte_compiler.matcher import ResourceMatcher
 from ambyte_rules.engine import ConflictResolutionEngine
 from ambyte_rules.models import ConflictTrace, ResolvedPolicy
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
-
-from ambyte_compiler.matcher import ResourceMatcher
 
 
 def _load_resource_tags(urn: str) -> dict[str, str]:

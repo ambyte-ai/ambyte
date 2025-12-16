@@ -14,7 +14,7 @@ dependencies = [
     "ambyte-sdk",
     "ambyte-schemas",
     "ambyte-connectors",
-    "ambyte-control-plane",
+    "ambyte-control-plane-api",
     "ambyte-ingest",
     "ambyte-compiler",
     "ambyte-cli",
@@ -39,7 +39,7 @@ members = [
 ambyte-sdk = { workspace = true }
 ambyte-schemas = { workspace = true }
 ambyte-connectors = { workspace = true }
-ambyte-control-plane = { workspace = true }
+ambyte-control-plane-api = { workspace = true }
 ambyte-ingest = { workspace = true }
 ambyte-compiler = { workspace = true }
 ambyte-cli = { workspace = true }
