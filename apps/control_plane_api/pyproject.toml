@@ -9,7 +9,8 @@ dependencies = [
     "uvicorn[standard]>=0.38.0",
     "sqlalchemy[asyncio]>=2.0.44",
     "alembic>=1.17.2",
-    "psycopg[binary,pool]>=3.2.13"
+    "psycopg[binary,pool]>=3.2.13",
+    "python-jose[cryptography]>=3.5.0",
 ]
 
 [build-system]

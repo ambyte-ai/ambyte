@@ -42,17 +42,28 @@ class Settings(BaseSettings):
 	# ==========================================================================
 	# Security
 	# ==========================================================================
-	# Used for cryptographic signing or internal hashing.
-	# IN PROD: Change this via env var!
+	# Used for internal hashing (API Keys), NOT for JWT signing anymore.
+	# IN PROD: Change this via env var! # TODO
 	SECRET_KEY: str = secrets.token_urlsafe(32)
-
-	# Access token lifetime (for generated JWTs, if we roll our own)
-	ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
 
 	# CORS (Cross-Origin Resource Sharing)
 	# Define who can talk to the API (e.g., your React dashboard).
 	# Default allows localhost.
 	BACKEND_CORS_ORIGINS: Annotated[list[AnyHttpUrl] | str, BeforeValidator(parse_cors)] = []
+
+	# CLERK CONFIGURATION
+	# Found in Clerk Dashboard -> API Keys -> Issuer
+	# e.g., "https://clerk.ambyte.ai" or "https://humble-foal-12.clerk.accounts.dev"
+	CLERK_ISSUER: str = 'https://quiet-slug-97.clerk.accounts.dev'
+
+	# Expected Audience (usually empty for standard Clerk setups, but good practice to check)
+	CLERK_AUDIENCE: str | None = None
+
+	@computed_field
+	@property
+	def CLERK_JWKS_URL(self) -> str:
+		"""Constructs the JWKS URL from the Issuer."""
+		return f'{self.CLERK_ISSUER.rstrip("/")}/.well-known/jwks.json'
 
 	# ==========================================================================
 	# Database (PostgreSQL)
