@@ -1,38 +1,34 @@
 from fastapi import APIRouter
 
-# Placeholder imports for the endpoints we are about to build.
-# As we build each module in Phase 4-6, these imports will become valid.
-from src.api.v1.endpoints import (
-	audit,
-	auth,
-	check,
-	lineage,
-	obligations,
-	projects,
-	resources,
-)
+# Import the endpoints we have implemented
+from src.api.v1.endpoints import obligations, project, resources
+
+# Placeholders for future phases (Uncomment as we build them)
+# from src.api.v1.endpoints import audit, auth, check, lineage
 
 api_router = APIRouter()
 
 # ==============================================================================
 # Security & Tenancy
 # ==============================================================================
-api_router.include_router(auth.router, prefix='/auth', tags=['Authentication'])
-api_router.include_router(projects.router, prefix='/projects', tags=['Projects & API Keys'])
+# Auth router usually handles Login/SAML - to be built if not using pure API Keys/Clerk
+# api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+
+api_router.include_router(project.router, prefix='/projects', tags=['Projects & API Keys'])
 
 # ==============================================================================
-# The Decision Engine (Critical Path)
+# The Decision Engine (Phase 5)
 # ==============================================================================
-api_router.include_router(check.router, prefix='/check', tags=['Decision Engine'])
+# api_router.include_router(check.router, prefix="/check", tags=["Decision Engine"])
 
 # ==============================================================================
-# Policy Management (CRUD)
+# Policy Management (Phase 4 - NOW LIVE)
 # ==============================================================================
 api_router.include_router(obligations.router, prefix='/obligations', tags=['Obligations'])
 api_router.include_router(resources.router, prefix='/resources', tags=['Inventory'])
 
 # ==============================================================================
-# Observability
+# Observability (Phase 6)
 # ==============================================================================
-api_router.include_router(audit.router, prefix='/audit', tags=['Audit Logs'])
-api_router.include_router(lineage.router, prefix='/lineage', tags=['Data Lineage'])
+# api_router.include_router(audit.router, prefix="/audit", tags=["Audit Logs"])
+# api_router.include_router(lineage.router, prefix="/lineage", tags=["Data Lineage"])

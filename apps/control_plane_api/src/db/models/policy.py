@@ -1,4 +1,4 @@
-from sqlalchemy import Index, String
+from sqlalchemy import Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from src.db.base import Base
@@ -38,4 +38,7 @@ class Obligation(Base, UUIDMixin, TimestampMixin, ProjectScopedMixin):
 
 	# Optimization: Gin Index on the definition allows queries like:
 	# SELECT * FROM obligations WHERE definition->'target'->'match_tags' @> '{"env": "prod"}'
-	__table_args__ = (Index('ix_obligations_definition', definition, postgresql_using='gin'),)
+	__table_args__ = (
+		Index('ix_obligations_definition', definition, postgresql_using='gin'),
+		UniqueConstraint('project_id', 'slug', name='uq_project_obligation_slug'),
+	)
