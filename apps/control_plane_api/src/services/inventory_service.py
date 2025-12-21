@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.core.cache import cache
 from src.db.models.inventory import Resource as ResourceModel
 from src.schemas.inventory import ResourceCreate
 
@@ -52,6 +53,9 @@ class InventoryService:
 		# 3. Execute
 		await db.execute(update_stmt)
 		await db.commit()
+
+		for urn in urns:
+			await cache.delete_pattern(f'decision:{project_id}:{urn}')
 
 		# 4. Fetch and return refreshed objects
 		query = select(ResourceModel).where(ResourceModel.project_id == project_id, ResourceModel.urn.in_(urns))

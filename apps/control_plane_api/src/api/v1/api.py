@@ -1,10 +1,10 @@
 from fastapi import APIRouter
 
 # Import the endpoints we have implemented
-from src.api.v1.endpoints import obligations, project, resources
+from src.api.v1.endpoints import check, obligations, project, resources
 
 # Placeholders for future phases (Uncomment as we build them)
-# from src.api.v1.endpoints import audit, auth, check, lineage
+# from src.api.v1.endpoints import audit, auth, lineage
 
 api_router = APIRouter()
 
@@ -19,7 +19,7 @@ api_router.include_router(project.router, prefix='/projects', tags=['Projects & 
 # ==============================================================================
 # The Decision Engine (Phase 5)
 # ==============================================================================
-# api_router.include_router(check.router, prefix="/check", tags=["Decision Engine"])
+api_router.include_router(check.router, prefix='/check', tags=['Decision Engine'])
 
 # ==============================================================================
 # Policy Management (Phase 4 - NOW LIVE)

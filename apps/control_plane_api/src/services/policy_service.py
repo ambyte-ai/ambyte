@@ -4,6 +4,7 @@ from ambyte_schemas.models.obligation import Obligation as PydanticObligation
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.core.cache import cache
 from src.db.models.policy import Obligation as ObligationModel
 from src.schemas.policy import ObligationFilter
 
@@ -70,6 +71,8 @@ class PolicyService:
 		# 3. Execute
 		await db.execute(update_stmt)
 		await db.commit()
+
+		await cache.delete_pattern(f'decision:{project_id}:*')
 
 		# 4. Return the refreshed objects
 		# We fetch them back to return standardized ORM objects with system IDs

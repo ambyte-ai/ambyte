@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.v1.api import api_router
+from src.core.cache import cache
 from src.core.config import settings
 from starlette.responses import RedirectResponse
 
@@ -13,9 +14,9 @@ async def lifespan(app: FastAPI):
 	Lifecycle manager for the FastAPI app.
 	Executed on startup (before receiving requests) and shutdown.
 	"""
-	# Startup: You could add DB connection checks or cache warming here.
+	await cache.connect()
 	yield
-	# Shutdown: Clean up resources (e.g., close DB pools if not handled by dependency)
+	await cache.close()
 	pass
 
 
