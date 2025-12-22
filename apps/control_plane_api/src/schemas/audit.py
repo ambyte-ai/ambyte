@@ -24,7 +24,7 @@ class AuditLogCreate(BaseModel):
 
 class BatchAuditLogCreate(BaseModel):
 	"""
-	For the bulk ingest endpoint (Phase 6.1).
+	For the bulk ingest endpoint.
 	"""
 
 	logs: list[AuditLogCreate]

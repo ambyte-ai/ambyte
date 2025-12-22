@@ -1,10 +1,10 @@
 from fastapi import APIRouter
 
 # Import the endpoints we have implemented
-from src.api.v1.endpoints import check, obligations, project, resources
+from src.api.v1.endpoints import audit, check, obligations, project, resources
 
 # Placeholders for future phases (Uncomment as we build them)
-# from src.api.v1.endpoints import audit, auth, lineage
+# from src.api.v1.endpoints import auth, lineage
 
 api_router = APIRouter()
 
@@ -30,5 +30,5 @@ api_router.include_router(resources.router, prefix='/resources', tags=['Inventor
 # ==============================================================================
 # Observability (Phase 6)
 # ==============================================================================
-# api_router.include_router(audit.router, prefix="/audit", tags=["Audit Logs"])
+api_router.include_router(audit.router, prefix='/audit', tags=['Audit Logs'])
 # api_router.include_router(lineage.router, prefix="/lineage", tags=["Data Lineage"])
