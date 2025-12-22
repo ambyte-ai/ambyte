@@ -17,13 +17,14 @@ WORKDIR /app
 # Copy the lockfile and root config first to leverage caching
 COPY pyproject.toml uv.lock ./
 
-# Copy only the specific internal packages required by the Control Plane API.
-# We skip 'cli', 'ingest', etc. to keep the layer smaller.
+# Copy shared libraries
 COPY schemas/ ./schemas/
-COPY packages/rules-engine/ ./packages/rules-engine/
+COPY packages/ ./packages/
+COPY connectors/ ./connectors/
 
-# Copy the API application manifest
-COPY apps/control_plane_api/pyproject.toml ./apps/control_plane_api/
+# Copy all apps to satisfy workspace topology (cli, ingest, etc.)
+# We will use .dockerignore to ensure we don't copy local .venvs
+COPY apps/ ./apps/
 
 # Install dependencies without the app code first.
 # This creates the virtualenv at /app/.venv
@@ -33,9 +34,6 @@ RUN uv sync --frozen --no-dev --no-install-project --package ambyte-control-plan
 # ------------------------------------------------------------------------------
 # 2. Application Code Layer
 # ------------------------------------------------------------------------------
-# Now copy the actual source code.
-# If code changes but deps don't, Docker uses the cache from Step 1.
-COPY apps/control_plane_api/ ./apps/control_plane_api/
 
 # Sync again to install the 'ambyte-control-plane-api' package itself into the venv
 RUN uv sync --frozen --no-dev --package ambyte-control-plane-api
