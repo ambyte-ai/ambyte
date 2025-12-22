@@ -1,4 +1,27 @@
 services:
+  api:
+    build:
+      context: ../../  # Points to repo root
+      dockerfile: apps/control_plane_api/Dockerfile
+    container_name: ambyte-api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=ambyte
+      - REDIS_HOST=redis
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Optional: Run migrations on startup
+    command: >
+      sh -c "uv run alembic upgrade head &&
+             uv run uvicorn src.main:app --host 0.0.0.0 --port 8000"
   db:
     image: postgres:15-alpine
     container_name: ambyte-postgres
