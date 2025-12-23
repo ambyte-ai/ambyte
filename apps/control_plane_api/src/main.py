@@ -1,3 +1,5 @@
+import asyncio
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +8,9 @@ from src.api.v1.api import api_router
 from src.core.cache import cache
 from src.core.config import settings
 from starlette.responses import RedirectResponse
+
+if sys.platform == 'win32':
+	asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 @asynccontextmanager

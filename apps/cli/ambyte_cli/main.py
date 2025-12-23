@@ -9,7 +9,7 @@ import typer
 from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback
 
-from ambyte_cli.commands import check, core, project
+from ambyte_cli.commands import check, cloud, core, project
 from ambyte_cli.ui.console import console
 
 # 1. Configure Global Rich Behavior
@@ -54,7 +54,7 @@ app.command(name='why', help='Explain the provenance and reasoning behind a spec
 cloud_app = typer.Typer(help='Manage interaction with the Ambyte Control Plane.')
 app.add_typer(cloud_app, name='cloud')
 
-# app.command(name='login', help='Authenticate with the Ambyte Control Plane.')(cloud.login)
+app.command(name='login', help='Authenticate with the Ambyte Control Plane.')(cloud.login)
 # app.command(name='push', help='Push local policies to the Control Plane.')(cloud.push)
 # app.command(name='pull', help='Pull the latest obligations from the Control Plane.')(cloud.pull)
 

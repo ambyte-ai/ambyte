@@ -1,19 +1,12 @@
 from fastapi import APIRouter
-
-# Import the endpoints we have implemented
-from src.api.v1.endpoints import audit, check, obligations, project, resources
-
-# Placeholders for future phases (Uncomment as we build them)
-# from src.api.v1.endpoints import auth, lineage
+from src.api.v1.endpoints import audit, auth, check, lineage, obligations, project, resources
 
 api_router = APIRouter()
 
 # ==============================================================================
 # Security & Tenancy
 # ==============================================================================
-# Auth router usually handles Login/SAML - to be built if not using pure API Keys/Clerk
-# api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-
+api_router.include_router(auth.router, prefix='/auth', tags=['Authentication'])
 api_router.include_router(project.router, prefix='/projects', tags=['Projects & API Keys'])
 
 # ==============================================================================
@@ -31,4 +24,4 @@ api_router.include_router(resources.router, prefix='/resources', tags=['Inventor
 # Observability (Phase 6)
 # ==============================================================================
 api_router.include_router(audit.router, prefix='/audit', tags=['Audit Logs'])
-# api_router.include_router(lineage.router, prefix="/lineage", tags=["Data Lineage"])
+api_router.include_router(lineage.router, prefix='/lineage', tags=['Data Lineage'])

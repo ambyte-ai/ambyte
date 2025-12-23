@@ -140,6 +140,7 @@ source = { editable = "apps/cli" }
 dependencies = [
     { name = "ambyte-compiler" },
     { name = "ambyte-sdk" },
+    { name = "python-dotenv" },
     { name = "rich" },
     { name = "typer" },
 ]
@@ -148,6 +149,7 @@ dependencies = [
 requires-dist = [
     { name = "ambyte-compiler", editable = "apps/policy_compiler" },
     { name = "ambyte-sdk", editable = "packages/python-sdk" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "rich", specifier = ">=14.2.0" },
     { name = "typer", specifier = ">=0.20.0" },
 ]

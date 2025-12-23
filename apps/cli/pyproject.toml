@@ -6,7 +6,8 @@ dependencies = [
     "ambyte-sdk",
     "ambyte-compiler",
     "typer>=0.20.0",
-    "rich>=14.2.0"
+    "rich>=14.2.0",
+    "python-dotenv>=1.2.1",
 ]
 
 [project.scripts]

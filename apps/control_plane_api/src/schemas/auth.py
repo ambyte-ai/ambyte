@@ -26,3 +26,27 @@ class ApiKeyRead(BaseModel):
 class ApiKeySecret(BaseModel):
 	key: str = Field(..., description='The raw secret key. Store this securely!')
 	info: ApiKeyRead
+
+
+class UserRead(BaseModel):
+	id: UUID
+	email: str
+	full_name: str | None = None
+	is_superuser: bool
+
+
+class ProjectBrief(BaseModel):
+	id: UUID
+	name: str
+
+
+class WhoAmIResponse(BaseModel):
+	"""
+	Comprehensive payload returned to the CLI after login.
+	Provides everything needed to initialize a workspace.
+	"""
+
+	user: UserRead
+	organization_id: UUID
+	organization_name: str
+	projects: list[ProjectBrief]
