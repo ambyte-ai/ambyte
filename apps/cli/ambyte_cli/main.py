@@ -56,7 +56,7 @@ app.add_typer(cloud_app, name='cloud')
 
 app.command(name='login', help='Authenticate with the Ambyte Control Plane.')(cloud.login)
 app.command(name='push', help='Push local policies to the Control Plane.')(cloud.push)
-# app.command(name='pull', help='Pull the latest obligations from the Control Plane.')(cloud.pull)
+app.command(name='pull', help='Pull the latest obligations from the Control Plane.')(cloud.pull)
 
 
 # 4. Global Callbacks & Configuration

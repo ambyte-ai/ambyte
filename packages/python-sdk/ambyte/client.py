@@ -155,6 +155,45 @@ class AmbyteClient:
 		response.raise_for_status()
 		return response
 
+	def list_obligations(self, enforcement_level: str | None = None, query: str | None = None) -> list[dict[str, Any]]:
+		"""
+		Fetch all active obligations for the current project.
+		"""
+		params = {}
+		if enforcement_level:
+			params['enforcement_level'] = enforcement_level
+		if query:
+			params['query'] = query
+
+		try:
+			response = self._client.get('/v1/obligations/', params=params)
+			response.raise_for_status()
+			return response.json()
+		except httpx.HTTPError as e:
+			# Reusing the existing error handler logic
+			self._handle_connection_error(e)
+			return []
+
+	async def list_obligations_async(
+		self, enforcement_level: str | None = None, query: str | None = None
+	) -> list[dict[str, Any]]:
+		"""
+		Asynchronously fetch all active obligations for the current project.
+		"""
+		params = {}
+		if enforcement_level:
+			params['enforcement_level'] = enforcement_level
+		if query:
+			params['query'] = query
+
+		try:
+			response = await self._async_client.get('/v1/obligations/', params=params)
+			response.raise_for_status()
+			return response.json()
+		except httpx.HTTPError as e:
+			self._handle_connection_error(e)
+			return []
+
 	# ==========================================================================
 	# PERMISSION CHECKS (SYNC)
 	# ==========================================================================

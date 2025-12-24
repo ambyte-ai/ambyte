@@ -9,11 +9,13 @@ from typing import Annotated
 
 import httpx
 import typer
+from ambyte.client import AmbyteClient
 from ambyte_cli.config import get_workspace_root, load_config, save_config
 from ambyte_cli.services.api_client import CloudApiClient
 from ambyte_cli.services.auth import CredentialsManager
 from ambyte_cli.services.loader import ObligationLoader
 from ambyte_cli.services.oidc import OidcService
+from ambyte_cli.services.sync import SyncService
 from ambyte_cli.ui.console import console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -351,3 +353,90 @@ def _print_push_summary(summary: list[dict], is_dry_run: bool):
 		console.print('\n[dim]Cloud is already up to date.[/dim]')
 	else:
 		console.print(f'\n[bold]{changed}[/bold] items modified.')
+
+
+def pull(
+	force: bool = typer.Option(False, '--force', '-f', help='Overwrite local files even if they appear unchanged.'),
+	prune: bool = typer.Option(False, '--prune', help='Delete local files that no longer exist in the Control Plane.'),
+	dry_run: bool = typer.Option(False, '--dry-run', help='Preview changes without writing to the filesystem.'),
+):
+	"""
+	Download the latest obligations from the Ambyte Control Plane.
+
+	Synchronizes the 'Source of Truth' from the cloud into your local /policies directory.
+	"""
+	try:
+		# 1. Environment Check
+		config = load_config()
+		auth_svc = CredentialsManager()
+
+		if not auth_svc.is_authenticated:
+			console.print('[error]Not authenticated.[/error] Please run [bold]ambyte login[/bold] first.')
+			raise typer.Exit(1)
+
+		if not config.cloud.project_id:
+			console.print('[error]No project linked to this workspace.[/error]')
+			console.print('Run [bold]ambyte login[/bold] to select a project.')
+			raise typer.Exit(1)
+
+		# 2. Initialize Services
+		# We use the SDK client to handle authentication headers and base URL
+		client = AmbyteClient.get_instance()
+		sync_svc = SyncService(config, client)
+
+		with console.status(f'[info]Fetching obligations for project [bold]{config.project_name}[/bold]...[/info]'):
+			result = sync_svc.pull(force=force, prune=prune, dry_run=dry_run)
+
+		if prune and not dry_run:
+			confirm = typer.confirm('Prune is active. This will delete local files not found in the cloud. Proceed?')
+			if not confirm:
+				console.print('[yellow]Pruning aborted.[/yellow]')
+				prune = False  # Disable pruning but continue with the rest of the pull
+		# 3. Render Results Table
+		if not result.actions:
+			console.print('\n[good]✔ Local policies are already up to date.[/good]')
+			return
+
+		table = Table(
+			title=f'\nPull Results: {result.project_name}', show_header=True, header_style='bold cyan', box=None
+		)
+		table.add_column('Status', width=12)
+		table.add_column('Policy ID', style='dim')
+		table.add_column('Title')
+		table.add_column('Source', style='italic')
+
+		status_colors = {'NEW': 'green', 'UPDATED': 'yellow', 'DELETED': 'red', 'UNCHANGED': 'dim'}
+
+		for action in result.actions:
+			color = status_colors.get(action.status, 'white')
+			table.add_row(f'[{color}]{action.status}[/{color}]', action.slug, action.title, action.source)
+
+		console.print(table)
+
+		# 4. Final Summary
+		if dry_run:
+			console.print('\n[warning]⚠ Dry run active. No files were modified.[/warning]')
+		else:
+			summary = []
+			new_count = len([a for a in result.actions if a.status == 'NEW'])
+			upd_count = len([a for a in result.actions if a.status == 'UPDATED'])
+			del_count = len([a for a in result.actions if a.status == 'DELETED'])
+
+			if new_count:
+				summary.append(f'{new_count} added')
+			if upd_count:
+				summary.append(f'{upd_count} updated')
+			if del_count:
+				summary.append(f'{del_count} deleted')
+
+			if summary:
+				console.print(f'\n[good]✔ Successfully synchronized ({", ".join(summary)}).[/good]')
+				console.print("[dim]Next: Run 'ambyte build' to update enforcement artifacts.[/dim]\n")
+			else:
+				console.print('\n[good]✔ No changes required.[/good]\n')
+
+	except Exception as e:
+		console.print(f'\n[error]Pull failed:[/error] {e}')
+		if '401' in str(e):
+			console.print("[info]Tip: Your session may have expired. Try running 'ambyte login' again.[/info]")
+		raise typer.Exit(1) from e
