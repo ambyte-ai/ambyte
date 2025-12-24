@@ -143,6 +143,7 @@ def init(
 		console.print(f'  1. Review the sample policy: [cyan]cat {config.policies_dir}/gdpr_sample.yaml[/cyan]')
 		console.print('  2. Compile it into executable artifacts: [cyan]ambyte build[/cyan]')
 		console.print('  3. Check a hypothetical permission: [cyan]ambyte check --resource urn:snowflake:...[/cyan]')
+		console.print('  4. Ascend to the cloud: [cyan]ambyte login[/cyan]')
 
 	except Exception as e:
 		console.print(f'[bold red]Failed to initialize workspace:[/bold red] {e}')

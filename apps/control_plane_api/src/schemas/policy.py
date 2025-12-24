@@ -23,6 +23,7 @@ class BatchObligationCreate(BaseModel):
 	obligations: list[Obligation] = Field(
 		..., description="List of obligations to upsert. Matching is done via the 'id' (slug) field."
 	)
+	prune: bool = Field(default=False, description='If True, deactivates policies not present in this batch.')
 
 
 class ObligationFilter(BaseModel):
@@ -35,3 +36,15 @@ class ObligationFilter(BaseModel):
 	)
 	# Allows searching by partial title match
 	query: str | None = Field(default=None, description='Search term for title or slug')
+
+
+class PolicySummary(BaseModel):
+	slug: str
+	title: str
+	status: str  # "CREATED", "UPDATED", "UNCHANGED", "PRUNED"
+	version: int
+
+
+class PushResponse(BaseModel):
+	summary: list[PolicySummary]
+	dry_run: bool = False

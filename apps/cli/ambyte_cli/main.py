@@ -55,7 +55,7 @@ cloud_app = typer.Typer(help='Manage interaction with the Ambyte Control Plane.'
 app.add_typer(cloud_app, name='cloud')
 
 app.command(name='login', help='Authenticate with the Ambyte Control Plane.')(cloud.login)
-# app.command(name='push', help='Push local policies to the Control Plane.')(cloud.push)
+app.command(name='push', help='Push local policies to the Control Plane.')(cloud.push)
 # app.command(name='pull', help='Pull the latest obligations from the Control Plane.')(cloud.pull)
 
 

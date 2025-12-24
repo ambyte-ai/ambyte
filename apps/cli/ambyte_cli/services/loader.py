@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import timedelta
 from enum import Enum
@@ -6,7 +7,6 @@ from typing import Any, TypeVar, cast
 
 import yaml
 from ambyte_cli.config import AmbyteConfig
-from ambyte_cli.ui.console import console
 from ambyte_schemas.models.obligation import (
 	AiModelConstraint,
 	EnforcementLevel,
@@ -21,64 +21,91 @@ from ambyte_schemas.models.obligation import (
 )
 from pydantic import ValidationError
 
+logger = logging.getLogger(__name__)
 T = TypeVar('T', bound=Enum)
 
 
 class PolicyLoaderError(Exception):
 	"""Raised when a policy file cannot be parsed."""
 
-	pass
+	def __init__(self, message: str, file_path: Path | str | None = None):
+		self.message = message
+		self.file_path = file_path
+		super().__init__(self.message)
 
 
 class ObligationLoader:
 	def __init__(self, config: AmbyteConfig):
 		self.policy_dir = config.abs_policies_dir
 
+	def validate_all(self) -> list[str]:
+		"""
+		Validation-Only Mode.
+		Scans all files and returns a list of error messages.
+		If the list is empty, the workspace is 'Push-Ready'.
+		"""
+		_, errors = self._load_batch()
+		return errors
+
 	def load_all(self) -> list[Obligation]:
 		"""
-		Scans the configured policy directory for .yaml/.yml files
-		and parses them into Obligation objects.
+		Loads all valid obligations.
+		Note: This is permissive and skips broken files (logged as warnings).
+		For strict loading, use validate_all() first.
+		"""
+		valid_obs, _ = self._load_batch()
+		return valid_obs
+
+	def _load_batch(self) -> tuple[list[Obligation], list[str]]:
+		"""
+		Internal logic to crawl the directory and parse all YAML files.
+		Returns a tuple of (list of valid Obligations, list of Error Strings).
 		"""
 		obligations: list[Obligation] = []
-		# Support both .yaml and .yml
-		files = list(self.policy_dir.glob('**/*.yaml')) + list(self.policy_dir.glob('**/*.yml'))
+		errors: list[str] = []
 
-		if not files:
-			# We don't error here, just return empty, let caller decide if that's bad
-			return []
+		if not self.policy_dir.exists():
+			return [], [f'Policy directory not found: {self.policy_dir}']
+
+		# Support recursive globbing for nested policy structures
+		files = list(self.policy_dir.glob('**/*.yaml')) + list(self.policy_dir.glob('**/*.yml'))
 
 		for file_path in files:
 			try:
 				ob = self._load_file(file_path)
 				obligations.append(ob)
 			except PolicyLoaderError as e:
-				console.print(f'[bold red]Error loading {file_path.name}:[/bold red] {e}')
+				err_msg = f'File {file_path.relative_to(self.policy_dir)}: {e.message}'
+				errors.append(err_msg)
 			except Exception as e:
-				console.print(f'[bold red]Unexpected crash in {file_path.name}:[/bold red] {e}')
+				err_msg = f'File {file_path.relative_to(self.policy_dir)}: Unexpected crash - {str(e)}'
+				errors.append(err_msg)
 
-		return obligations
+		return obligations, errors
 
 	def _load_file(self, path: Path) -> Obligation:
 		"""Reads file from disk and parses it."""
-		with open(path, encoding='utf-8') as f:
-			try:
+		try:
+			with open(path, encoding='utf-8') as f:
 				raw = yaml.safe_load(f)
-			except yaml.YAMLError as e:
-				raise PolicyLoaderError(f'Invalid YAML syntax: {e}') from None
+		except yaml.YAMLError as e:
+			raise PolicyLoaderError(f'Invalid YAML syntax: {e}', file_path=path) from None
+		except Exception as e:
+			raise PolicyLoaderError(f'Could not read file: {e}', file_path=path) from None
 
 		return self.parse_obligation_data(raw, source_name=path.name)
 
 	def parse_obligation_data(self, raw: dict[str, Any], source_name: str = 'Unknown') -> Obligation:
 		"""
 		Parses a raw dictionary into an Obligation object.
-		Publicly accessible for Git/History loading.
 		"""
 		if not raw:
 			raise PolicyLoaderError(f'Policy definition in {source_name} is empty.')
 
 		try:
-			# 1. Parse Provenance (Optional in Pydantic, but we enforce it for Audit)
-			provenance = SourceProvenance(**raw.get('provenance', {}))
+			# 1. Parse Provenance
+			provenance_data = raw.get('provenance', {})
+			provenance = SourceProvenance(**provenance_data)
 
 			# 2. Map Enums
 			enf_level = self._resolve_enum(EnforcementLevel, raw.get('enforcement_level', 'AUDIT_ONLY'))
@@ -86,7 +113,7 @@ class ObligationLoader:
 			# 3. Handle Polymorphic Constraint
 			constraint_kwargs = {}
 
-			# Check for each supported constraint type key at the root level
+			# Direct root-level keys (Recommended style)
 			if 'retention' in raw:
 				constraint_kwargs = self._build_constraint_kwargs('RETENTION', raw['retention'])
 			elif 'geofencing' in raw:
@@ -97,17 +124,13 @@ class ObligationLoader:
 				constraint_kwargs = self._build_constraint_kwargs('PRIVACY_ENHANCEMENT', raw['privacy'])
 			elif 'ai_model' in raw:
 				constraint_kwargs = self._build_constraint_kwargs('AI_MODEL_CONSTRAINT', raw['ai_model'])
-
-			# Fallback for old style (nested 'constraint' block) - Backward compatibility or test compatibility
+			# Fallback for nested 'constraint' block
 			elif 'constraint' in raw:
 				c_data = raw['constraint']
 				c_type = c_data.get('type', '').upper()
 				constraint_kwargs = self._build_constraint_kwargs(c_type, c_data)
-
 			else:
-				pass
-
-			target_data = raw.get('target', {})
+				raise PolicyLoaderError('Policy is missing a valid constraint (retention, geofencing, etc.)')
 
 			# 4. Construct Final Object
 			return Obligation(
@@ -116,19 +139,23 @@ class ObligationLoader:
 				description=str(raw.get('description', '')),
 				provenance=provenance,
 				enforcement_level=enf_level,
-				target=target_data,
+				target=raw.get('target', {}),
 				**constraint_kwargs,
 			)
 
 		except ValidationError as e:
-			# Simplify Pydantic errors
-			errors = '; '.join([f'{err["loc"][0]}: {err["msg"]}' for err in e.errors()])
-			raise PolicyLoaderError(f'Schema Validation Failed: {errors}') from None
+			# Create a readable summary of Pydantic validation errors
+			error_details = []
+			for err in e.errors():
+				loc = ' -> '.join(str(l) for l in err['loc'])
+				error_details.append(f'[{loc}]: {err["msg"]}')
+
+			raise PolicyLoaderError(f'Schema Validation Failed: {"; ".join(error_details)}') from None
 		except ValueError as e:
 			raise PolicyLoaderError(str(e)) from e
 
 	def _build_constraint_kwargs(self, c_type: str, data: dict[str, Any]) -> dict[str, Any]:
-		"""Maps YAML 'constraint' block to Schema OneOf fields."""
+		"""Maps YAML constraint blocks to Schema fields."""
 		if not c_type:
 			raise PolicyLoaderError("Constraint block missing 'type' field.")
 
@@ -136,46 +163,49 @@ class ObligationLoader:
 			dur_str = data.get('duration', '0d')
 			duration = self._parse_duration(dur_str)
 			trigger = self._resolve_enum(RetentionTrigger, data.get('trigger', 'UNSPECIFIED'))
-
-			rule = RetentionRule(
-				duration=duration,
-				trigger=trigger,
-				allow_legal_hold_override=data.get('allow_legal_hold_override', False),
-			)
-			return {'retention': rule}
+			return {
+				'retention': RetentionRule(
+					duration=duration,
+					trigger=trigger,
+					allow_legal_hold_override=data.get('allow_legal_hold_override', False),
+				)
+			}
 
 		if c_type == 'GEOFENCING':
-			rule = GeofencingRule(
-				allowed_regions=data.get('allowed_regions', []),
-				denied_regions=data.get('denied_regions', []),
-				strict_residency=data.get('strict_residency', False),
-			)
-			return {'geofencing': rule}
+			return {
+				'geofencing': GeofencingRule(
+					allowed_regions=data.get('allowed_regions', []),
+					denied_regions=data.get('denied_regions', []),
+					strict_residency=data.get('strict_residency', False),
+				)
+			}
 
 		if c_type == 'PURPOSE_RESTRICTION':
-			rule = PurposeRestriction(
-				allowed_purposes=data.get('allowed_purposes', []), denied_purposes=data.get('denied_purposes', [])
-			)
-			return {'purpose': rule}
+			return {
+				'purpose': PurposeRestriction(
+					allowed_purposes=data.get('allowed_purposes', []), denied_purposes=data.get('denied_purposes', [])
+				)
+			}
 
 		if c_type == 'PRIVACY_ENHANCEMENT':
 			method = self._resolve_enum(PrivacyMethod, data.get('method', 'UNSPECIFIED'))
-			rule = PrivacyEnhancementRule(method=method, parameters=data.get('parameters', {}))
-			return {'privacy': rule}
+			return {'privacy': PrivacyEnhancementRule(method=method, parameters=data.get('parameters', {}))}
 
 		if c_type == 'AI_MODEL_CONSTRAINT':
-			rule = AiModelConstraint(
-				training_allowed=data.get('training_allowed', False),
-				fine_tuning_allowed=data.get('fine_tuning_allowed', False),
-				rag_usage_allowed=data.get('rag_usage_allowed', False),
-				requires_open_source_release=data.get('requires_open_source_release', False),
-				attribution_text_required=data.get('attribution_text_required', ''),
-			)
-			return {'ai_model': rule}
+			return {
+				'ai_model': AiModelConstraint(
+					training_allowed=data.get('training_allowed', False),
+					fine_tuning_allowed=data.get('fine_tuning_allowed', False),
+					rag_usage_allowed=data.get('rag_usage_allowed', False),
+					requires_open_source_release=data.get('requires_open_source_release', False),
+					attribution_text_required=data.get('attribution_text_required', ''),
+				)
+			}
 
 		raise PolicyLoaderError(f"Unknown constraint type: '{c_type}'")
 
 	def _resolve_enum(self, enum_cls: type[T], value: str | int) -> T:
+		"""Fuzzy enum resolution (handles case-insensitivity and short/long names)."""
 		if isinstance(value, int):
 			try:
 				return enum_cls(value)
@@ -183,27 +213,18 @@ class ObligationLoader:
 				pass
 
 		norm_val = str(value).upper().strip()
-
-		# Exact match
 		if norm_val in enum_cls.__members__:
 			return enum_cls[norm_val]
 
-		# Fuzzy match
 		for member_name, member in enum_cls.__members__.items():
-			# 1. Suffix match (Input is SHORT, Enum is LONG)
-			# e.g. Input: "BLOCKING" matches Enum: "ENFORCEMENT_LEVEL_BLOCKING"
-			if member_name.endswith(f'_{norm_val}'):
-				return member
-
-			# 2. Reverse match (Input is LONG, Enum is SHORT)
-			# e.g. Input: "ENFORCEMENT_LEVEL_AUDIT_ONLY" matches Enum: "AUDIT_ONLY"
-			if norm_val.endswith(f'_{member_name}'):
+			if member_name.endswith(f'_{norm_val}') or norm_val.endswith(f'_{member_name}'):
 				return member
 
 		valid_options = list(enum_cls.__members__.keys())
-		raise ValueError(f"Invalid value '{value}' for {enum_cls.__name__}. Valid options: {valid_options}")
+		raise ValueError(f"Invalid value '{value}'. Valid options: {valid_options}")
 
 	def _parse_duration(self, val: str) -> timedelta:
+		"""Parses shorthand like '30d' or '1y' into timedelta."""
 		match = re.match(r'^(\d+)([dmyh])$', str(val).lower())
 		if not match:
 			raise ValueError(f"Invalid duration format: '{val}'. Use '30d', '24h', etc.")
