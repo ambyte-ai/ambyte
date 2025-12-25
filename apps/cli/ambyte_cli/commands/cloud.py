@@ -184,10 +184,6 @@ def login():
 
 	# 4. Finalizing
 	if final_api_key and user_data and selected_project:
-		# If we didn't select a project (pasted key flow), do it now
-		if choice == 3:
-			selected_project = _select_project(user_data['projects'])
-
 		# Save to ~/.ambyte/credentials
 		auth_svc.save(
 			api_key=final_api_key, project_id=str(selected_project['id']), org_id=str(user_data['organization_id'])

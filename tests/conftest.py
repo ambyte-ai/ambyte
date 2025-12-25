@@ -160,3 +160,68 @@ def sample_obligation_geofencing() -> Obligation:
 		# OneOf Constraint: Geofencing
 		geofencing=GeofencingRule(allowed_regions=['DE', 'FR', 'IT'], strict_residency=True),
 	)
+
+
+# ==============================================================================
+# CLI AUTHENTICATION MOCKS
+# ==============================================================================
+
+
+@pytest.fixture
+def mock_credentials_path(tmp_path):
+	"""
+	Creates a temporary directory structure to mimic ~/.ambyte
+	"""
+	mock_home = tmp_path / 'fake_home'
+	ambyte_dir = mock_home / '.ambyte'
+	ambyte_dir.mkdir(parents=True)
+	return ambyte_dir
+
+
+@pytest.fixture
+def mock_credentials_file(mock_credentials_path, monkeypatch):
+	"""
+	Redirects the CLI auth service to a temporary credentials file.
+	Returns a factory function to easily set up different auth states.
+	"""
+	creds_file = mock_credentials_path / 'credentials'
+
+	# Patch the constants in the auth service module so it looks at our temp file
+	import ambyte_cli.services.auth as auth_svc
+
+	monkeypatch.setattr(auth_svc, 'AMBYTE_HOME', mock_credentials_path)
+	monkeypatch.setattr(auth_svc, 'CREDENTIALS_FILE', creds_file)
+
+	def _setup_creds(
+		api_key: str = 'sk_live_test_key_12345',
+		project_id: str = '00000000-0000-0000-0000-000000000001',
+		org_id: str = '00000000-0000-0000-0000-000000000002',
+		profile: str = 'default',
+	):
+		data = {
+			profile: {
+				'api_key': api_key,
+				'project_id': project_id,
+				'organization_id': org_id,
+			}
+		}
+		with open(creds_file, 'w', encoding='utf-8') as f:
+			yaml.dump(data, f)
+		return creds_file
+
+	return _setup_creds
+
+
+@pytest.fixture
+def no_credentials(mock_credentials_path, monkeypatch):
+	"""
+	Ensures the credentials file does not exist for testing logged-out states.
+	"""
+	creds_file = mock_credentials_path / 'credentials'
+	if creds_file.exists():
+		creds_file.unlink()
+
+	import ambyte_cli.services.auth as auth_svc
+
+	monkeypatch.setattr(auth_svc, 'CREDENTIALS_FILE', creds_file)
+	return creds_file
