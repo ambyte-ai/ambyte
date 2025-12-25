@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from src.core import security
+from src.core.cache import cache
 from src.core.scopes import Scope
 from src.db.models.auth import ApiKey, User
 from src.db.models.tenancy import Organization, Project
@@ -58,14 +59,18 @@ async def get_current_api_key(
 		if now > expires:
 			raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Key Expired')
 
-	# 4. Usage Tracking (Best effort) TODO: Redis
+	# 4. Usage Tracking (Best effort) - Using Redis for performance
+	# We buffer last_used_at in Redis to avoid DB write pressure on every request.
+	# A background job could sync these to the DB periodically if needed.
 	try:
-		api_key.last_used_at = datetime.now(timezone.utc)
-		db.add(api_key)
-		await db.commit()
+		usage_key = f'api_key_usage:{api_key.id}'
+		now = datetime.now(timezone.utc)
+		# Store timestamp in Redis with 1 hour TTL (will be refreshed on each use)
+		if cache._redis:
+			await cache._redis.set(usage_key, now.isoformat(), ex=3600)
 	except Exception:
-		logger.warning('Failed to update API Key last_used_at', exc_info=True)
-		pass  # Don't fail request on logging error
+		logger.warning('Failed to update API Key last_used_at in Redis', exc_info=True)
+		# Don't fail request on tracking error
 
 	return api_key
 
