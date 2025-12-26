@@ -36,6 +36,7 @@ class CredentialsManager:
 
 	def __init__(self, profile: str = 'default'):
 		self.profile = profile
+		self._bootstrap_env()
 
 	def _bootstrap_env(self):
 		"""
