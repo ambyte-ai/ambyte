@@ -1,5 +1,8 @@
 import hashlib
+import json
+import logging
 import secrets
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -39,31 +42,88 @@ def verify_token(plain_token: str, hashed_token: str) -> bool:
 # Clerk JWT Logic (Human Auth)
 # ==============================================================================
 
-# Simple in-memory cache for the Public Keys (JWKS) to avoid HTTP hits on every request.
-# Structure: { "kid_123": { ...key_data... } }
-_JWKS_CACHE: dict[str, Any] = {}
+logger = logging.getLogger(__name__)
+
+# JWKS Cache Configuration
+JWKS_CACHE_KEY = 'clerk:jwks'
+JWKS_CACHE_TTL_SECONDS = 3600  # 1 hour
+
+# Fallback in-memory cache (used when Redis is unavailable)
+_JWKS_MEMORY_CACHE: dict[str, Any] = {}
+_JWKS_CACHE_EXPIRY: datetime | None = None
 
 
 async def _get_clerk_jwks() -> dict[str, Any]:
 	"""
 	Fetches the JSON Web Key Set from Clerk.
-	Populates the global cache.
+	Uses Redis cache with TTL, falls back to in-memory cache if Redis unavailable.
 	"""
-	global _JWKS_CACHE
+	global _JWKS_MEMORY_CACHE, _JWKS_CACHE_EXPIRY
 
-	# If cache is empty, fetch.
-	# TODO: In production, add a TTL or refresh logic if verification fails.
-	if not _JWKS_CACHE:
-		async with httpx.AsyncClient() as client:
-			response = await client.get(settings.CLERK_JWKS_URL)
-			response.raise_for_status()
-			jwks = response.json()
+	# Try Redis cache first
+	try:
+		from src.core.cache import cache
 
-			# Index by Key ID (kid) for O(1) lookup
-			for key in jwks.get('keys', []):
-				_JWKS_CACHE[key['kid']] = key
+		if cache._redis:
+			cached_data = await cache._redis.get(JWKS_CACHE_KEY)
+			if cached_data:
+				# Parse cached JWKS and index by kid
+				jwks_data = json.loads(cached_data)
+				return {key['kid']: key for key in jwks_data.get('keys', [])}
+	except Exception as e:
+		logger.debug(f'Redis cache unavailable for JWKS: {e}')
 
-	return _JWKS_CACHE
+	# Check in-memory cache with TTL
+	now = datetime.now(timezone.utc)
+	if _JWKS_MEMORY_CACHE and _JWKS_CACHE_EXPIRY and now < _JWKS_CACHE_EXPIRY:
+		return _JWKS_MEMORY_CACHE
+
+	# Fetch fresh JWKS from Clerk
+	async with httpx.AsyncClient() as client:
+		response = await client.get(settings.CLERK_JWKS_URL)
+		response.raise_for_status()
+		jwks = response.json()
+
+	# Index by Key ID (kid) for O(1) lookup
+	indexed_jwks = {key['kid']: key for key in jwks.get('keys', [])}
+
+	# Store in Redis (if available)
+	try:
+		from src.core.cache import cache
+
+		if cache._redis:
+			await cache._redis.set(JWKS_CACHE_KEY, json.dumps(jwks), ex=JWKS_CACHE_TTL_SECONDS)
+	except Exception as e:
+		logger.debug(f'Failed to cache JWKS in Redis: {e}')
+
+	# Always update in-memory cache as fallback
+	_JWKS_MEMORY_CACHE = indexed_jwks
+	_JWKS_CACHE_EXPIRY = datetime.now(timezone.utc).replace(
+		second=datetime.now(timezone.utc).second + JWKS_CACHE_TTL_SECONDS
+	)
+
+	return indexed_jwks
+
+
+async def _refresh_jwks_cache() -> dict[str, Any]:
+	"""Force refresh the JWKS cache (used on key rotation)."""
+	global _JWKS_MEMORY_CACHE, _JWKS_CACHE_EXPIRY
+
+	# Clear Redis cache
+	try:
+		from src.core.cache import cache
+
+		if cache._redis:
+			await cache._redis.delete(JWKS_CACHE_KEY)
+	except Exception as e:
+		logger.debug(f'Failed to clear Redis JWKS cache: {e}')
+
+	# Clear in-memory cache
+	_JWKS_MEMORY_CACHE = {}
+	_JWKS_CACHE_EXPIRY = None
+
+	# Fetch fresh
+	return await _get_clerk_jwks()
 
 
 async def verify_clerk_token(token: str) -> dict[str, Any] | None:
@@ -71,8 +131,8 @@ async def verify_clerk_token(token: str) -> dict[str, Any] | None:
 	Verifies a Clerk JWT against the fetched JWKS.
 
 	Returns:
-	    dict: The decoded claims (sub, email, exp, etc.)
-	    None: If invalid or expired.
+		dict: The decoded claims (sub, email, exp, etc.)
+		None: If invalid or expired.
 	"""
 	try:
 		# 1. Decode Headers to find which Key ID (kid) signed this token
@@ -87,11 +147,12 @@ async def verify_clerk_token(token: str) -> dict[str, Any] | None:
 
 		# If key not found, try refreshing cache once (key rotation scenario)
 		if not public_key:
-			_JWKS_CACHE.clear()
-			jwks = await _get_clerk_jwks()
+			logger.info(f'JWKS key {kid} not found, refreshing cache (possible key rotation)')
+			jwks = await _refresh_jwks_cache()
 			public_key = jwks.get(kid)
 
 		if not public_key:
+			logger.warning(f'JWKS key {kid} not found even after refresh')
 			return None
 
 		# 3. Verify Signature
@@ -105,8 +166,18 @@ async def verify_clerk_token(token: str) -> dict[str, Any] | None:
 		)
 		return payload
 
-	except (ExpiredSignatureError, JWTClaimsError, JWTError, httpx.HTTPError):
-		# In a real app, you might log specific errors here TODO
+	except ExpiredSignatureError:
+		logger.debug('JWT verification failed: Token expired')
 		return None
-	except Exception:
+	except JWTClaimsError as e:
+		logger.debug(f'JWT verification failed: Invalid claims - {e}')
+		return None
+	except JWTError as e:
+		logger.debug(f'JWT verification failed: {e}')
+		return None
+	except httpx.HTTPError as e:
+		logger.warning(f'JWT verification failed: HTTP error fetching JWKS - {e}')
+		return None
+	except Exception as e:
+		logger.error(f'JWT verification failed: Unexpected error - {e}')
 		return None
