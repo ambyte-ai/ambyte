@@ -22,6 +22,10 @@ class Organization(Base, UUIDMixin, TimestampMixin):
 	name: Mapped[str] = mapped_column(String, nullable=False, index=True)
 	slug: Mapped[str] = mapped_column(String, unique=True, index=True)
 
+	# Clerk Organization ID (for enterprise SSO sync)
+	# Nullable because personal orgs created via self-serve don't have one
+	external_id: Mapped[str | None] = mapped_column(String, unique=True, nullable=True, index=True)
+
 	# Billing / Plan info would go here in the future TODO
 	# plan_tier: Mapped[str] = mapped_column(String, default="free")
 

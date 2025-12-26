@@ -163,24 +163,58 @@ async def get_current_user(
 	# A. Check if they have an 'org_id' in their Clerk metadata (Enterprise usage).
 	# B. If not, create a default "Personal Organization" for them.
 
-	# Check for existing default org (optional logic, simplified here for MVP)
-	# For MVP, we create a new Organization for every new user
-	# (assuming 1 User = 1 Org for self-serve signups). TODO
+	# Check for Clerk organization ID in the JWT claims
+	# Clerk sends org info in 'org_id' or nested in 'organizations' claim
+	clerk_org_id = payload.get('org_id')
 
-	new_org = Organization(name=f"{email}'s Organization", slug=f'org-{external_id[-8:]}')
-	db.add(new_org)
-	await db.flush()  # Get ID for new_org
+	target_org: Organization | None = None
 
+	if clerk_org_id:
+		# Enterprise flow: User belongs to a Clerk Organization
+		# Look up existing org by external_id (Clerk org ID)
+		org_query = select(Organization).where(Organization.external_id == clerk_org_id)
+		org_result = await db.execute(org_query)
+		target_org = org_result.scalars().first()
+
+		if not target_org:
+			# First user from this Clerk org - create the organization
+			# Use org metadata from Clerk if available, else generate name
+			org_name = payload.get('org_name', f'Organization {clerk_org_id[-8:]}')
+			org_slug = payload.get('org_slug', f'org-{clerk_org_id[-8:]}')
+			target_org = Organization(
+				name=org_name,
+				slug=org_slug,
+				external_id=clerk_org_id,
+			)
+			db.add(target_org)
+			await db.flush()  # Get ID for target_org
+
+			# Create default project for new organization
+			default_project = Project(name='Default Project', organization_id=target_org.id)
+			db.add(default_project)
+
+	else:
+		# Self-serve flow: No Clerk org, create a personal organization
+		target_org = Organization(
+			name=f"{email}'s Organization",
+			slug=f'org-{external_id[-8:]}',
+			external_id=None,  # Personal orgs don't have Clerk org ID
+		)
+		db.add(target_org)
+		await db.flush()
+
+		# Create default project for personal org
+		default_project = Project(name='Default Project', organization_id=target_org.id)
+		db.add(default_project)
+
+	# Create the user and assign to the organization
 	new_user = User(
 		email=email,
 		external_id=external_id,
-		organization_id=new_org.id,
+		organization_id=target_org.id,
 		is_superuser=False,  # Default safe
 	)
 	db.add(new_user)
-
-	default_project = Project(name='Default Project', organization_id=new_org.id)
-	db.add(default_project)
 
 	await db.commit()
 	await db.refresh(new_user)
