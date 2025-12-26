@@ -259,8 +259,12 @@ def _build_local(compiler: PolicyCompilerService, resources: list[dict], obligat
 				.decode()
 				.strip()
 			)
+	except subprocess.CalledProcessError:
+		# Not a git repo or git command failed; this is expected in some envs (e.g. docker, smoke tests)
+		logger.debug('Could not retrieve git hash (likely not a git repository).')
+		pass
 	except Exception:
-		logger.warning('Failed to get git hash for build metadata.', exc_info=True)
+		logger.warning('Failed to get git hash for build metadata.', exc_info=False)
 		pass
 
 	context = {'project_name': config.project_name, 'git_hash': git_hash}
@@ -401,12 +405,16 @@ def _get_template_path() -> Path:
 	try:
 		root = get_workspace_root()
 
-		# 1. Dev/Monorepo path
-		# Traverse up to find repo root if running from inside cli app
-		repo_root = root.parent.parent
-		candidate = repo_root / 'policy-library' / 'sql_templates'
-		if candidate.exists():
-			return candidate
+		# 1. Dev/Monorepo path (Source-based resolution)
+		# Correctly locate repo root relative to this file (core.py)
+		# Path: apps/cli/ambyte_cli/commands/core.py -> ../../../../.. -> repo_root
+		current_file = Path(__file__).resolve()
+		# Protect against index errors if path is too short
+		if len(current_file.parents) >= 5:
+			repo_root = current_file.parents[4]
+			candidate = repo_root / 'policy-library' / 'sql_templates'
+			if candidate.exists():
+				return candidate
 
 		# 2. User Workspace path (scaffolded)
 		candidate = root / 'templates'

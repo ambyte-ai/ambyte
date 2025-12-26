@@ -23,11 +23,9 @@ _ambyte_theme = Theme(
 )
 
 # Singleton instance
-# force_terminal=True ensures colors work even if piped, though standard behavior
-# usually auto-detects. We rely on auto-detection for best UX.
-console = Console(theme=_ambyte_theme)
+console = Console(theme=_ambyte_theme, legacy_windows=False)
 
 
 def error_console() -> Console:
 	"""Returns a console writing to stderr."""
-	return Console(theme=_ambyte_theme, stderr=True)
+	return Console(theme=_ambyte_theme, stderr=True, legacy_windows=False)
