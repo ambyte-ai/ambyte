@@ -73,8 +73,8 @@ def test_flush_batch_routing(clean_manager, mock_client):
 
 	# Extract audit calls
 	audit_calls = [c for c in calls if c[0][0] == '/v1/audit']
-	assert len(audit_calls) == 2
-	assert audit_calls[0].kwargs['json'] == {'audit_id': 'A1'}
+	assert len(audit_calls) == 1
+	assert audit_calls[0].kwargs['json'] == {'logs': [{'audit_id': 'A1'}, {'audit_id': 'A2'}]}
 
 	# Extract lineage calls
 	run_calls = [c for c in calls if c[0][0] == '/v1/lineage/run']
@@ -130,7 +130,7 @@ def test_shutdown_flushes_remaining(mock_client):
 			manager.shutdown()
 
 			# Verify it was sent
-			mock_client._client.post.assert_called_with('/v1/audit', json={'msg': 'last_breath'})
+			mock_client._client.post.assert_called_with('/v1/audit', json={'logs': [{'msg': 'last_breath'}]})
 
 			# Verify thread is dead
 			assert not manager._worker_thread.is_alive()

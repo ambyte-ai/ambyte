@@ -121,11 +121,8 @@ class TrackingManager:
 
 	def _send_audit_batch(self, batch: list[dict]):
 		try:
-			# Assuming Client has a batch method, or we iterate.
-			# Ideally the API supports POST /v1/audit/batch
-			# For MVP, we'll iterate (performance hit is on the background thread, so acceptable) # TODO
-			for item in batch:
-				self.client._client.post('/v1/audit', json=item)
+			# Send the entire batch in one request
+			self.client._client.post('/v1/audit', json={'logs': batch})
 		except Exception as e:
 			logger.warning(f'Failed to upload audit batch: {e}')
 
