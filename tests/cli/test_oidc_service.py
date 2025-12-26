@@ -2,7 +2,7 @@ import threading
 from queue import Queue
 from unittest import mock
 
-from ambyte_cli.services.oidc import AuthCallbackHandler, AuthServer, OidcService
+from ambyte_cli.services.oidc import AuthCallbackHandler, OidcService
 
 # ==============================================================================
 # UNIT TESTS: OidcService

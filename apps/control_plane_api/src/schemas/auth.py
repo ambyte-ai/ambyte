@@ -38,6 +38,7 @@ class UserRead(BaseModel):
 class ProjectBrief(BaseModel):
 	id: UUID
 	name: str
+	role: str | None = None  # User's role in this project (owner/admin/editor/viewer)
 
 
 class WhoAmIResponse(BaseModel):

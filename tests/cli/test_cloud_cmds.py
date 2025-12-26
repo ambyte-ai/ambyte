@@ -1,11 +1,10 @@
-import json
 import os
 import textwrap
 from pathlib import Path
 from unittest import mock
 
-import pytest
 import httpx
+import pytest
 from ambyte_cli.config import load_config, save_config
 from ambyte_cli.main import app
 from typer.testing import CliRunner
@@ -216,8 +215,8 @@ def test_pull_prune_locally(initialized_workspace, mock_credentials_file):
 
 def test_api_client_http_errors(initialized_workspace, mock_credentials_file):
 	"""Directly test API client error formatting for coverage."""
-	from ambyte_cli.services.api_client import CloudApiClient
 	from ambyte_cli.config import load_config
+	from ambyte_cli.services.api_client import CloudApiClient
 
 	mock_credentials_file()
 	link_project(initialized_workspace)

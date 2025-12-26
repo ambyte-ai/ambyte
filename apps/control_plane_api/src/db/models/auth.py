@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
@@ -6,6 +9,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.db.base import Base
 from src.db.models.mixins import ProjectScopedMixin, TimestampMixin, UUIDMixin
 from src.db.models.tenancy import Organization, Project
+
+if TYPE_CHECKING:
+	from src.db.models.membership import ProjectMembership
 
 
 class User(Base, UUIDMixin, TimestampMixin):
@@ -28,7 +34,10 @@ class User(Base, UUIDMixin, TimestampMixin):
 	# Link to Organization (Single-tenant view for now)
 	organization_id: Mapped[str] = mapped_column(ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
 
-	organization: Mapped['Organization'] = relationship(back_populates='users')
+	organization: Mapped[Organization] = relationship(back_populates='users')
+
+	# Project memberships (for project-level RBAC)
+	project_memberships: Mapped[list[ProjectMembership]] = relationship(back_populates='user')
 
 
 class ApiKey(Base, UUIDMixin, TimestampMixin, ProjectScopedMixin):
@@ -60,4 +69,4 @@ class ApiKey(Base, UUIDMixin, TimestampMixin, ProjectScopedMixin):
 	last_used_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
 	# Relationship to Project defined in Mixin
-	project: Mapped['Project'] = relationship(back_populates='api_keys')
+	project: Mapped[Project] = relationship(back_populates='api_keys')

@@ -12,6 +12,7 @@ from src.core import security
 from src.core.cache import cache
 from src.core.scopes import Scope
 from src.db.models.auth import ApiKey, User
+from src.db.models.membership import ProjectMembership, ProjectRole
 from src.db.models.tenancy import Organization, Project
 from src.db.session import get_db
 
@@ -168,6 +169,8 @@ async def get_current_user(
 	clerk_org_id = payload.get('org_id')
 
 	target_org: Organization | None = None
+	default_project: Project | None = None
+	is_org_creator = False  # Track if this user is creating the org
 
 	if clerk_org_id:
 		# Enterprise flow: User belongs to a Clerk Organization
@@ -192,6 +195,13 @@ async def get_current_user(
 			# Create default project for new organization
 			default_project = Project(name='Default Project', organization_id=target_org.id)
 			db.add(default_project)
+			await db.flush()
+			is_org_creator = True
+		else:
+			# User joining existing org - find the default project
+			project_query = select(Project).where(Project.organization_id == target_org.id).limit(1)
+			project_result = await db.execute(project_query)
+			default_project = project_result.scalars().first()
 
 	else:
 		# Self-serve flow: No Clerk org, create a personal organization
@@ -206,6 +216,8 @@ async def get_current_user(
 		# Create default project for personal org
 		default_project = Project(name='Default Project', organization_id=target_org.id)
 		db.add(default_project)
+		await db.flush()
+		is_org_creator = True
 
 	# Create the user and assign to the organization
 	new_user = User(
@@ -215,6 +227,18 @@ async def get_current_user(
 		is_superuser=False,  # Default safe
 	)
 	db.add(new_user)
+	await db.flush()  # Get user ID for membership
+
+	# Create membership for the default project (if one exists)
+	# Org creators get OWNER role, users joining existing orgs get EDITOR role
+	if default_project:
+		membership_role = ProjectRole.OWNER if is_org_creator else ProjectRole.EDITOR
+		owner_membership = ProjectMembership(
+			user_id=new_user.id,
+			project_id=default_project.id,
+			role=membership_role,
+		)
+		db.add(owner_membership)
 
 	await db.commit()
 	await db.refresh(new_user)

@@ -1,8 +1,9 @@
+from unittest import mock
+
 import httpx
 import pytest
-from unittest import mock
-from ambyte_cli.services.api_client import CloudApiClient
 from ambyte_cli.config import AmbyteConfig, CloudConfig
+from ambyte_cli.services.api_client import CloudApiClient
 
 # ==============================================================================
 # FIXTURES

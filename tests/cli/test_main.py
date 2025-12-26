@@ -1,8 +1,8 @@
 import logging
 from unittest import mock
-import pytest
-from typer.testing import CliRunner
+
 from ambyte_cli.main import app
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

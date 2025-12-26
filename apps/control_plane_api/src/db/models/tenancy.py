@@ -9,6 +9,7 @@ from src.db.models.mixins import TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
 	from src.db.models.auth import ApiKey, User
+	from src.db.models.membership import ProjectMembership
 
 
 class Organization(Base, UUIDMixin, TimestampMixin):
@@ -59,3 +60,6 @@ class Project(Base, UUIDMixin, TimestampMixin):
 	# We define reverse relationships as strings to avoid circular imports
 	# if we haven't imported the other models yet.
 	api_keys: Mapped[list[ApiKey]] = relationship(back_populates='project', cascade='all, delete-orphan')
+
+	# User memberships (for project-level RBAC)
+	members: Mapped[list[ProjectMembership]] = relationship(back_populates='project', cascade='all, delete-orphan')

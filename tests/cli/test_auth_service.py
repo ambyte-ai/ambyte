@@ -163,7 +163,7 @@ def test_delete_profile(mock_credentials_file):
 	"""Verify removing a single profile."""
 	mock_credentials_file(api_key='sk1', profile='p1')
 	# Manually add a second profile to the file
-	with open(auth_mod.CREDENTIALS_FILE, 'r') as f:
+	with open(auth_mod.CREDENTIALS_FILE) as f:
 		data = yaml.safe_load(f)
 	data['p2'] = {'api_key': 'sk2'}
 	with open(auth_mod.CREDENTIALS_FILE, 'w') as f:
