@@ -44,7 +44,7 @@ def test_login_already_authenticated_env(monkeypatch, capsys):
 	"""Should exit early if AMBYTE_API_KEY is in env."""
 	monkeypatch.setenv('AMBYTE_API_KEY', 'sk_live_env_key')
 	result = runner.invoke(app, ['login'])
-	assert 'Already authenticated via environment variable' in result.stdout
+	assert 'Authenticated via environment/credentials. Linking project...' in result.stdout
 
 
 def test_login_manual_paste_success(no_credentials, initialized_workspace):

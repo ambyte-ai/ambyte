@@ -32,6 +32,8 @@ class DecisionEngine:
 		# Initialize Cache
 		# Keys are hashes of (urn, action, actor_id, frozen_context)
 		# Values are booleans (True=Allow, False=Deny)
+		# TODO: push "Invalidate" signals (via Redis/Websockets) to the SDK so policy changes take effect instantly
+		# rather than waiting for the TTL to expire.
 		self._cache = TTLCache(maxsize=10000, ttl=self.config.decision_cache_ttl_seconds)
 
 		# Local Policy State (for LOCAL mode)
