@@ -16,24 +16,35 @@ class PdfParser(BaseParser):
 	Uses layout analysis (OCR/Vision) to detect headers, footers, and tables.
 	"""
 
-	def parse(self, file: BinaryIO, filename: str | None = None) -> list[Element]:
+	def parse(self, file: BinaryIO | str, filename: str | None = None) -> list[Element]:
 		"""
-		Parses a PDF file stream into a list of semantic elements.
+		Parses a PDF file stream or path into a list of semantic elements.
 
 		We use the 'hi_res' strategy because legal documents often rely on
 		visual cues (bolding, indentation, tables) that standard text extraction misses.
 		"""
-		logger.info(f'Starting hi_res PDF partition for: {filename or "unknown"}')
+		# If file is a string, it's a path. If it's bytes, it's an open file.
+		is_path = isinstance(file, str)
+		name = filename or (file if is_path else 'unknown')
+
+		logger.info(f'Starting hi_res PDF partition for: {name}')
 
 		try:
 			# 1. Partitioning
-			elements = partition_pdf(
-				file=file,
-				file_filename=filename,
-				strategy='hi_res',
-				infer_table_structure=True,
-				include_page_breaks=False,
-			)
+			# unstructured.partition.pdf can take `filename` (path) OR `file` (file-like obj)
+			# We must be careful not to pass both conflictingly.
+			kwargs = {
+				'strategy': 'hi_res',
+				'infer_table_structure': True,
+				'include_page_breaks': False,
+			}
+
+			if is_path:
+				# Pass as filename argument, leave file=None
+				elements = partition_pdf(filename=file, **kwargs)
+			else:
+				# Pass as file-like object
+				elements = partition_pdf(file=file, file_filename=filename, **kwargs)
 
 			# 2. Cleaning & Post-processing
 			cleaned_elements = self._clean_elements(elements)
