@@ -1,4 +1,7 @@
 services:
+  # ============================================================================
+  # CONTROL PLANE (Management API)
+  # ============================================================================
   api:
     build:
       context: ../../  # Points to repo root
@@ -18,10 +21,33 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Optional: Run migrations on startup
+    # Run migrations on startup, then start the server
     command: >
       sh -c "uv run alembic upgrade head &&
              uv run uvicorn src.main:app --host 0.0.0.0 --port 8000"
+
+  # ============================================================================
+  # INGEST WORKER (AI Processing Pipeline)
+  # ============================================================================
+  ingest:
+    build:
+      context: ../../ # Points to repo root to capture shared schemas/packages
+      dockerfile: apps/ingest_worker/Dockerfile
+    container_name: ambyte-ingest
+    restart: always
+    ports:
+      - "8001:8000" # Mapped to 8001 to allow side-by-side running with API
+    environment:
+      - AMBYTE_INGEST_QDRANT_URL=http://qdrant:6333
+      # Secrets must be provided in the shell environment or a .env file
+      - AMBYTE_INGEST_VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      - AMBYTE_INGEST_OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - qdrant
+
+  # ============================================================================
+  # INFRASTRUCTURE (State Stores)
+  # ============================================================================
   db:
     image: postgres:15-alpine
     container_name: ambyte-postgres
@@ -54,6 +80,16 @@ services:
       timeout: 3s
       retries: 5
 
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: ambyte-qdrant
+    restart: always
+    ports:
+      - "6333:6333"
+    volumes:
+      - ambyte_qdrant_data:/qdrant/storage
+
 volumes:
   ambyte_pg_data:
   ambyte_redis_data:
+  ambyte_qdrant_data:

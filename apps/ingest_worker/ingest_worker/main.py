@@ -124,6 +124,11 @@ def health_check():
 	return {'status': 'ok', 'service': 'ingest-worker'}
 
 
+def _save_to_disk(source_file, dest_path: str):
+	with open(dest_path, 'wb') as buffer:
+		shutil.copyfileobj(source_file, buffer)
+
+
 @app.post(
 	'/v1/ingest',
 	response_model=IngestJobResponse,
@@ -131,11 +136,6 @@ def health_check():
 	summary='Async Ingest (Upload & Index)',
 	description='Uploads a file for background processing. Returns a Job ID to poll.',
 )
-def _save_to_disk(source_file, dest_path: str):
-	with open(dest_path, 'wb') as buffer:
-		shutil.copyfileobj(source_file, buffer)
-
-
 async def trigger_ingestion(
 	background_tasks: BackgroundTasks,
 	file: Annotated[UploadFile, File(description='PDF Document')],
