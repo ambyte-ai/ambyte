@@ -67,9 +67,9 @@ class Settings(BaseSettings):
 	# Still used for the generative extraction step
 	OPENAI_API_KEY: SecretStr = Field(
 		...,
-		description='API Key for OpenAI (GPT-4o) used in extraction phase.',
+		description='API Key for OpenAI (GPT-5.2) used in extraction phase.',
 	)
-	EXTRACTION_MODEL: str = 'gpt-4o'
+	EXTRACTION_MODEL: str = 'gpt-5.2'
 
 	@computed_field
 	@property

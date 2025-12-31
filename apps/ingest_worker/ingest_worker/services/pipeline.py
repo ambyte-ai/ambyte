@@ -7,29 +7,45 @@ from ingest_worker.extractors.chunker import SectionChunker
 from ingest_worker.extractors.pdf_parser import PdfParser
 from ingest_worker.intelligence.embedding import EmbeddingService
 from ingest_worker.intelligence.vector_store import VectorStore
+from ingest_worker.services.deduplicator import Deduplicator
+from ingest_worker.services.definition_extractor import DefinitionExtractor
+from ingest_worker.services.obligation_extractor import ObligationExtractor
 
 logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline:
 	"""
-	Orchestrates the conversion of raw documents into indexed vectors.
+	Orchestrates the conversion of raw documents into indexed vectors
+	AND machine-enforceable obligations.
+
+	Flow:
+	1. Parse (OCR) -> Elements
+	2. Chunk -> Semantic Blocks
+	3. Embed -> Vectors
+	4. Index -> Qdrant (RAG Memory)
+	5. Pass 1 -> Extract Definitions (Glossary)
+	6. Pass 2 -> Extract Constraints (Raw Rules)
+	7. Pass 3 -> Deduplicate & Merge (Final Policy)
 	"""
 
 	def __init__(self):
-		# Phase 1 Components (CPU Bound)
+		# Phase 1: Physical Extraction
 		self.parser = PdfParser()
-		# Max tokens set slightly lower than embedding model limit (1024 for Voyage)
-		# to leave room for metadata injection if needed later.
 		self.chunker = SectionChunker(max_tokens=800)
 
-		# Phase 2 Components (IO/Network Bound)
+		# Phase 2: Vector Memory
 		self.embedder = EmbeddingService()
 		self.vector_store = VectorStore()
 
+		# Phase 3: Legal Reasoning (The "Brain")
+		self.def_extractor = DefinitionExtractor()
+		self.rule_extractor = ObligationExtractor()
+		self.deduplicator = Deduplicator()
+
 	async def initialize(self):
 		"""
-		Lifecycle hook: Run on app startup to ensure DB schema exists.
+		Lifecycle hook: Run on app startup.
 		"""
 		logger.info('Initializing Ingestion Pipeline...')
 		await self.vector_store.ensure_collection()
@@ -44,25 +60,14 @@ class IngestionPipeline:
 	) -> dict[str, Any]:
 		"""
 		Executes the full pipeline for a single document.
-
-		Args:
-		    file: The binary file stream OR a string file path.
-		    filename: Original filename.
-		    job_id: Unique trace ID for this process.
-		    project_id: Optional tenant ID.
-
-		Returns:
-		    Dictionary containing execution stats.
-		"""  # noqa: E101
+		"""
 		start_time = time.time()
 		logger.info(f'[{job_id}] Starting ingestion for: {filename}')
 
 		try:
-			# ------------------------------------------------------------------
-			# Step 1: Parsing (CPU Intensive)
-			# ------------------------------------------------------------------
-			# We offload this to a threadpool so we don't block the AsyncIO loop
-			# used by other requests (like health checks or status queries).
+			# ==================================================================
+			# STEP 1: PARSING (CPU)
+			# ==================================================================
 			parse_start = time.time()
 			elements = await run_in_threadpool(self.parser.parse, file, filename)
 
@@ -72,53 +77,77 @@ class IngestionPipeline:
 
 			logger.info(f'[{job_id}] Parsed {len(elements)} elements in {time.time() - parse_start:.2f}s')
 
-			# ------------------------------------------------------------------
-			# Step 2: Chunking (CPU - Fast)
-			# ------------------------------------------------------------------
-			# Chunking is usually fast enough to run in the main thread,
-			# but if documents are massive (>500 pages), consider threadpool here too.
+			# ==================================================================
+			# STEP 2: CHUNKING (CPU)
+			# ==================================================================
 			chunks = self.chunker.chunk(elements, filename)
 			logger.info(f'[{job_id}] Generated {len(chunks)} semantic chunks')
 
 			if not chunks:
 				return {'status': 'no_chunks_generated', 'chunks': 0}
 
-			# ------------------------------------------------------------------
-			# Step 3: Embedding (IO Bound - Network)
-			# ------------------------------------------------------------------
+			# ==================================================================
+			# STEP 3: EMBEDDING (GPU/API)
+			# ==================================================================
 			embed_start = time.time()
-
-			# Extract just the content strings for the API
 			texts = [c.content for c in chunks]
 			vectors = await self.embedder.embed_documents(texts)
+			logger.info(f'[{job_id}] Generated embeddings in {time.time() - embed_start:.2f}s')
 
-			logger.info(f'[{job_id}] Generated {len(vectors)} embeddings in {time.time() - embed_start:.2f}s')
-
-			# ------------------------------------------------------------------
-			# Step 4: Indexing (IO Bound - DB)
-			# ------------------------------------------------------------------
-			index_start = time.time()
-			upserted_count = await self.vector_store.upsert_chunks(
+			# ==================================================================
+			# STEP 4: INDEXING (DB IO)
+			# ==================================================================
+			# We persist vectors so we can use RAG later or debug the LLM's view
+			await self.vector_store.upsert_chunks(
 				job_id=job_id,
 				project_id=project_id,
 				chunks=chunks,
 				vectors=vectors,
 			)
 
-			index_duration = time.time() - index_start
+			# ==================================================================
+			# STEP 5: PASS 1 - DEFINITIONS (LLM)
+			# ==================================================================
+			# Build the glossary to ground the subsequent rule extraction
+			def_start = time.time()
+			context = await self.def_extractor.extract(chunks)
+			logger.info(f'[{job_id}] Definitions extracted in {time.time() - def_start:.2f}s')
+
+			# ==================================================================
+			# STEP 6: PASS 2 - CONSTRAINTS (LLM Parallel)
+			# ==================================================================
+			rule_start = time.time()
+			raw_constraints = await self.rule_extractor.extract_all(chunks, context)
+			logger.info(f'[{job_id}] Constraints extracted in {time.time() - rule_start:.2f}s')
+
+			# ==================================================================
+			# STEP 7: PASS 3 - DEDUPLICATION (CPU)
+			# ==================================================================
+			# Flatten redundancy and convert to final Schema
+			final_obligations = self.deduplicator.merge(raw_constraints, filename=filename, project_id=project_id)
+
 			total_duration = time.time() - start_time
 			logger.info(
-				f'[{job_id}] Indexing complete in {index_duration:.2f}s. Upserted {upserted_count} points.\n'
-				f'[{job_id}] Total Duration: {total_duration:.2f}s'
+				f'[{job_id}] Pipeline Complete. '
+				f'Final Result: {len(final_obligations)} obligations. '
+				f'Total Time: {total_duration:.2f}s'
 			)
 
+			# Return stats AND the actual objects
+			# The API handler (main.py) will map this to the response model.
 			return {
 				'status': 'completed',
 				'job_id': job_id,
-				'chunks_processed': len(chunks),
 				'duration_seconds': round(total_duration, 2),
+				'chunks_processed': len(chunks),
+				'definitions_found': len(context.definitions),
+				'raw_constraints_found': len(raw_constraints),
+				'final_obligations_count': len(final_obligations),
+				# Return serialized obligations so they can be sent to Control Plane
+				# or returned to the user immediately.
+				'obligations': [ob.model_dump(mode='json') for ob in final_obligations],
 			}
 
 		except Exception as e:
 			logger.error(f'[{job_id}] Pipeline failed: {e}', exc_info=True)
-			raise  # Re-raise to let the API/Worker handle the failure state
+			raise
