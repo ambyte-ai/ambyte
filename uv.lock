@@ -414,14 +414,10 @@ version = "0.1.0"
 source = { editable = "packages/rules-engine" }
 dependencies = [
     { name = "ambyte-schemas" },
-    { name = "networkx" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "ambyte-schemas", editable = "schemas" },
-    { name = "networkx", specifier = ">=3.5" },
-]
+requires-dist = [{ name = "ambyte-schemas", editable = "schemas" }]
 
 [[package]]
 name = "ambyte-schemas"

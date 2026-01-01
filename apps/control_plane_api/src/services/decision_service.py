@@ -6,6 +6,7 @@ from uuid import UUID
 # Import Logic Libraries (Shared Code)
 from ambyte_compiler.matcher import ResourceMatcher
 from ambyte_rules.engine import ConflictResolutionEngine
+from ambyte_rules.lineage import LineageGraph
 from ambyte_rules.models import (
 	EffectiveAiRules,
 	EffectiveGeofencing,
@@ -14,6 +15,7 @@ from ambyte_rules.models import (
 	ResolvedPolicy,
 )
 from ambyte_schemas.models.obligation import Obligation as PydanticObligation
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,8 +24,15 @@ from src.core.cache import cache
 from src.db.models.inventory import Resource
 from src.db.models.policy import Obligation as ObligationModel
 from src.schemas.check import CheckRequest, CheckResponse
+from src.services.lineage_graph_adapter import PostgresMetadataProvider
 
 logger = logging.getLogger(__name__)
+
+
+class LineageState(BaseModel):
+	inherited_risk: int
+	inherited_sensitivity: int
+	poisoned_constraints: list[str]
 
 
 class ServerPolicyEvaluator:
@@ -155,23 +164,71 @@ class DecisionService:
 		"""
 		Main Entrypoint.
 		1. Resolve Policy (Cache -> Compute)
-		2. Evaluate Specific Request
+		2. Resolve Lineage Context (Cache -> DB Graph Traversal)
+		3. Evaluate Specific Request
 		"""
 		# 1. Resolve Effective Policy (The mathematical truth)
-		resolved_policy, cache_hit = await cls._resolve_effective_policy(db, project_id, req.resource_urn)
+		resolved_policy, cache_hit_policy = await cls._resolve_effective_policy(db, project_id, req.resource_urn)
 
-		# 2. Evaluate specific context against policy
-		allowed, reason = cls._evaluator.evaluate(resolved_policy, req.action, req.context)
+		# 2. Resolve Lineage State (The upstream truth)
+		lineage_state, cache_hit_lineage = await cls._resolve_lineage_state(db, req.resource_urn)
+
+		# 3. Inject Lineage findings into Context
+		# This allows Policy Rules to act on upstream properties (e.g. "If upstream is HIGH risk, Deny")
+		# We assume the policy evaluator looks for these keys if configured.
+		runtime_context = req.context.copy()
+		runtime_context['inherited_risk'] = lineage_state.inherited_risk
+		runtime_context['inherited_sensitivity'] = lineage_state.inherited_sensitivity
+
+		# Hard Block: Poison Pills (Upstream explicitly forbade downstream usage)
+		# e.g., Data A (No AI) -> Model B. Request to Train on Model B.
+		if lineage_state.poisoned_constraints and 'train' in req.action.lower():
+			return CheckResponse(
+				allowed=False,
+				reason=f'Blocked by upstream constraint propagation. Sources: {lineage_state.poisoned_constraints}',
+				cache_hit=cache_hit_lineage,
+				policy_snapshot=resolved_policy,
+			)
+
+		# 4. Evaluate specific context against policy
+		allowed, reason = cls._evaluator.evaluate(resolved_policy, req.action, runtime_context)
 
 		return CheckResponse(
 			allowed=allowed,
 			reason=reason,
-			cache_hit=cache_hit,
-			# In a real app, trace_id would generate an audit log reference # TODO
+			cache_hit=cache_hit_policy and cache_hit_lineage,
 			trace_id=None,
-			# Include policy details for debugging if needed, usually omitted in prod for bandwidth
 			policy_snapshot=None,
 		)
+
+	@classmethod
+	async def _resolve_lineage_state(cls, db: AsyncSession, urn: str) -> tuple[LineageState, bool]:
+		"""
+		Calculates inherited properties using the Graph Engine.
+		Uses Redis to cache the result of the recursive DB traversal.
+		"""
+		cache_key = f'lineage:state:{urn}'
+
+		# A. Cache Hit
+		cached = await cache.get_model(cache_key, LineageState)
+		if cached:
+			return cached, True
+
+		# B. Cache Miss (Compute via Postgres Recursive CTE)
+		provider = PostgresMetadataProvider(db)
+		graph = LineageGraph(provider)
+
+		# These calls now trigger SQL queries via the provider
+		risk = await graph.get_inherited_risk(urn)
+		sens = await graph.get_inherited_sensitivity(urn)
+		poison = await graph.get_poisoned_constraints(urn)
+
+		state = LineageState(inherited_risk=risk.value, inherited_sensitivity=sens.value, poisoned_constraints=poison)
+
+		# Store with 5 min TTL
+		await cache.set_model(cache_key, state, ttl_seconds=300)
+
+		return state, False
 
 	@classmethod
 	async def _resolve_effective_policy(
@@ -191,7 +248,6 @@ class DecisionService:
 		# --- B. CACHE MISS (COMPUTE) ---
 
 		# 1. Fetch Inventory Context (Tags)
-		# We need to know what 'tags' this resource has to match against policies.
 		res_query = select(Resource).where(Resource.project_id == project_id, Resource.urn == urn)
 		res_result = await db.execute(res_query)
 		resource_obj = res_result.scalars().first()
@@ -201,27 +257,16 @@ class DecisionService:
 			resource_tags = resource_obj.attributes.get('tags', {})
 
 		# 2. Fetch All Obligations for Project
-		# NOTE: For MVP (<10k policies), fetching all is faster than complex DB filtering.
-		# Future: Use Postgres JSONB indexing to filter `target` column in SQL. TODO
-		obl_query = select(ObligationModel).where(
-			ObligationModel.project_id == project_id, ObligationModel.is_active == True
-		)
+		obl_query = select(ObligationModel).where(ObligationModel.project_id == project_id, ObligationModel.is_active)
 		obl_result = await db.execute(obl_query)
 		raw_obligations = obl_result.scalars().all()
 
 		# 3. Match & Resolve
-		# Convert DB Models -> Pydantic Schemas for the Engine
 		pydantic_obs = [PydanticObligation(**ob.definition) for ob in raw_obligations]
-
-		# Filter: Which policies apply to THIS specific URN + Tags?
 		matched_obs = [ob for ob in pydantic_obs if cls._matcher.matches(urn, resource_tags, ob)]
-
-		# Resolve: Reduce conflicts to single truth
 		resolved_policy = cls._resolver.resolve(urn, matched_obs)
 
 		# 4. Cache Result (TTL: 5 Minutes)
-		# We use a short TTL so policy changes propagate reasonably fast
-		# even without explicit invalidation logic (safety net).
 		await cache.set_model(cache_key, resolved_policy, ttl_seconds=300)
 
 		return resolved_policy, False

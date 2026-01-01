@@ -5,6 +5,7 @@ from uuid import UUID
 from ambyte_schemas.models.lineage import RunType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.core.cache import cache
 from src.db.models.lineage import LineageEdge, LineageRun
 from src.schemas.lineage import LineageEventCreate, LineageRunCreate
 
@@ -85,6 +86,7 @@ class LineageService:
 		# Represents that data flowed from every Input to every Output during this run.
 		# If inputs or outputs are empty, no direct edges are created, but the Run exists as a record.
 		edges = []
+		affected_targets = set()
 
 		for source_urn in payload.inputs:
 			for target_urn in payload.outputs:
@@ -96,6 +98,7 @@ class LineageService:
 						target_urn=target_urn,
 					)
 				)
+				affected_targets.add(target_urn)
 
 		if not edges:
 			return 0
@@ -103,6 +106,15 @@ class LineageService:
 		# 3. Bulk Insert
 		db.add_all(edges)
 		await db.commit()
+
+		# 4. Cache Invalidation
+		if cache.client:
+			for urn in affected_targets:
+				# Pattern matches the key used in DecisionService
+				key = f'lineage:state:{urn}'
+				await cache.client.delete(key)
+
+			logger.debug(f'Invalidated lineage cache for {len(affected_targets)} targets.')
 
 		count = len(edges)
 		logger.debug(f'Created {count} lineage edges for run {payload.external_run_id}')

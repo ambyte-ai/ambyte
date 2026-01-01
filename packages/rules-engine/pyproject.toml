@@ -5,7 +5,6 @@ description = "Logic for policy conflict resolution and enforcement"
 requires-python = ">=3.11"
 dependencies = [
     "ambyte-schemas",
-    "networkx>=3.5" # Useful for dependency/lineage graphs
 ]
 
 [build-system]
