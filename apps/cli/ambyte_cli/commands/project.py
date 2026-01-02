@@ -164,8 +164,11 @@ def validate():
 		loader = ObligationLoader(config)
 
 		# 3. Attempt Load
-		# The loader prints individual file errors to the console automatically.
-		obligations = loader.load_all()
+		obligations, errors = loader._load_batch()
+
+		if errors:
+			for err in errors:
+				console.print(f'[red]Error loading policy:[/red] {err}')
 
 		# 4. Summary Report
 		if not obligations:

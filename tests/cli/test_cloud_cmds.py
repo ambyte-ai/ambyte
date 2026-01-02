@@ -47,8 +47,11 @@ def test_login_already_authenticated_env(monkeypatch, capsys):
 	assert 'Authenticated via environment/credentials. Linking project...' in result.stdout
 
 
-def test_login_manual_paste_success(no_credentials, initialized_workspace):
+def test_login_manual_paste_success(no_credentials, initialized_workspace, monkeypatch):
 	"""Tests Option 3: Manual API Key paste."""
+
+	# Ensure the environment is clean so it doesn't auto-login
+	monkeypatch.delenv('AMBYTE_API_KEY', raising=False)
 
 	mock_user_data = {
 		'user': {'email': 'test@ambyte.ai'},
@@ -56,18 +59,20 @@ def test_login_manual_paste_success(no_credentials, initialized_workspace):
 		'projects': [{'id': 'proj-abc', 'name': 'Cloud Project'}],
 	}
 
-	with mock.patch('httpx.Client.get') as mock_get:
-		mock_get.return_value = mock.Mock(status_code=200, json=lambda: mock_user_data)
+	# Prevent loading .env from root
+	with mock.patch('ambyte_cli.services.auth.load_dotenv'):
+		with mock.patch('httpx.Client.get') as mock_get:
+			mock_get.return_value = mock.Mock(status_code=200, json=lambda: mock_user_data)
 
-		# Choice 3 (Paste), Then the key, then Choice 1 (Project #1)
-		result = runner.invoke(app, ['login'], input='3\nsk_live_pasted_key\n1\n')
+			# Choice 3 (Paste), Then the key, then Choice 1 (Project #1)
+			result = runner.invoke(app, ['login'], input='3\nsk_live_pasted_key\n1\n')
 
 		assert result.exit_code == 0
 		assert 'Authenticated as test@ambyte.ai' in result.stdout
 		assert 'Default project set to: Cloud Project' in result.stdout
 
 
-def test_login_oidc_browser_flow(no_credentials, initialized_workspace):
+def test_login_oidc_browser_flow(no_credentials, initialized_workspace, monkeypatch):
 	"""Tests Option 1: Web Browser (OIDC) flow."""
 
 	state_val = 'secure-state-123'
@@ -77,23 +82,28 @@ def test_login_oidc_browser_flow(no_credentials, initialized_workspace):
 		'projects': [{'id': 'proj-789', 'name': 'Web Project'}],
 	}
 
-	with (
-		mock.patch('ambyte_cli.services.oidc.OidcService.get_auth_url', return_value=('http://login', state_val)),
-		mock.patch('ambyte_cli.services.oidc.OidcService.open_browser') as mock_browser,
-		mock.patch(
-			'ambyte_cli.services.oidc.OidcService.wait_for_token',
-			return_value={'token': 'jwt-token', 'state': state_val},
-		),
-		mock.patch('httpx.Client.get') as mock_get,
-		mock.patch('httpx.Client.post') as mock_post,
-	):
-		# Mock identity fetch (WhoAmI)
-		mock_get.return_value = mock.Mock(status_code=200, json=lambda: mock_user_data)
-		# Mock machine key exchange
-		mock_post.return_value = mock.Mock(status_code=200, json=lambda: {'key': 'sk_live_generated_key'})
+	# Ensure the environment is clean so it doesn't auto-login
+	monkeypatch.delenv('AMBYTE_API_KEY', raising=False)
 
-		# Choice 1 (Browser), then Choice 1 (Project)
-		result = runner.invoke(app, ['login'], input='1\n1\n')
+	# Prevent loading .env from root
+	with mock.patch('ambyte_cli.services.auth.load_dotenv'):
+		with (
+			mock.patch('ambyte_cli.services.oidc.OidcService.get_auth_url', return_value=('http://login', state_val)),
+			mock.patch('ambyte_cli.services.oidc.OidcService.open_browser') as mock_browser,
+			mock.patch(
+				'ambyte_cli.services.oidc.OidcService.wait_for_token',
+				return_value={'token': 'jwt-token', 'state': state_val},
+			),
+			mock.patch('httpx.Client.get') as mock_get,
+			mock.patch('httpx.Client.post') as mock_post,
+		):
+			# Mock identity fetch (WhoAmI)
+			mock_get.return_value = mock.Mock(status_code=200, json=lambda: mock_user_data)
+			# Mock machine key exchange
+			mock_post.return_value = mock.Mock(status_code=200, json=lambda: {'key': 'sk_live_generated_key'})
+
+			# Choice 1 (Browser), then Choice 1 (Project)
+			result = runner.invoke(app, ['login'], input='1\n1\n')
 
 		assert result.exit_code == 0
 		mock_browser.assert_called_once()
@@ -146,9 +156,14 @@ def test_push_dry_run(initialized_workspace, mock_credentials_file):
 # ==============================================================================
 
 
-def test_pull_not_authenticated(no_credentials, initialized_workspace):
+def test_pull_not_authenticated(no_credentials, initialized_workspace, monkeypatch):
 	"""Pull should fail if no API key is found."""
-	result = runner.invoke(app, ['pull'])
+	# Ensure the environment is clean so it doesn't auto-login
+	monkeypatch.delenv('AMBYTE_API_KEY', raising=False)
+
+	# Prevent loading .env from root
+	with mock.patch('ambyte_cli.services.auth.load_dotenv'):
+		result = runner.invoke(app, ['pull'])
 	assert result.exit_code == 1
 	assert 'Not authenticated' in result.stdout
 

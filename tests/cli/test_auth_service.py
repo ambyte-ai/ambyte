@@ -32,8 +32,8 @@ def test_get_api_key_from_file(mock_credentials_file, monkeypatch):
 	"""
 	mock_credentials_file(api_key='sk_live_from_file')
 	monkeypatch.delenv('AMBYTE_API_KEY', raising=False)
-
-	mgr = CredentialsManager()
+	with mock.patch('ambyte_cli.services.auth.load_dotenv'):
+		mgr = CredentialsManager()
 	assert mgr.get_api_key() == 'sk_live_from_file'
 
 
@@ -62,7 +62,6 @@ def test_bootstrap_env_loading(tmp_path, monkeypatch):
 	# 5. Mock load_dotenv and verify calls
 	with mock.patch('ambyte_cli.services.auth.load_dotenv') as mock_load:
 		mgr = CredentialsManager()
-		mgr._bootstrap_env()
 
 		# Should be called once for CWD and once for Root
 		assert mock_load.call_count == 2
@@ -188,8 +187,8 @@ def test_delete_on_missing_file(no_credentials):
 def test_is_authenticated_property(mock_credentials_file, monkeypatch):
 	"""Verify the boolean helper."""
 	monkeypatch.delenv('AMBYTE_API_KEY', raising=False)
-
-	mgr = CredentialsManager()
+	with mock.patch('ambyte_cli.services.auth.load_dotenv'):
+		mgr = CredentialsManager()
 
 	# False initially
 	assert mgr.is_authenticated is False

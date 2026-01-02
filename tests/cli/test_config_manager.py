@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from ambyte_cli.config import (
@@ -90,10 +91,25 @@ def test_get_workspace_root_from_subdir(setup_valid_workspace):
 	assert found == setup_valid_workspace
 
 
-def test_get_workspace_root_missing(temp_workspace):
-	"""Should raise FileNotFoundError if no .ambyte directory exists in hierarchy."""
-	with pytest.raises(FileNotFoundError) as exc:
-		get_workspace_root()
+def test_get_workspace_root_missing():
+	"""
+	Should raise FileNotFoundError if no .ambyte directory exists in hierarchy.
+	We mock the filesystem traversal to ensure no parent directories (like ~/.ambyte)
+	trigger a false positive.
+	"""
+	with mock.patch('ambyte_cli.config.Path.cwd') as mock_cwd:
+		# Create a mock path object that simulates being at the root (no parents)
+		mock_path = mock.MagicMock()
+		mock_cwd.return_value = mock_path
+		mock_path.parents = []
+
+		# Ensure the check (path / CONFIG_DIR_NAME).exists() returns False
+		# __truediv__ handles the / operator
+		mock_path.__truediv__.return_value.exists.return_value = False
+		mock_path.__truediv__.return_value.is_dir.return_value = False
+
+		with pytest.raises(FileNotFoundError) as exc:
+			get_workspace_root()
 
 	assert "Run 'ambyte init' first" in str(exc.value)
 

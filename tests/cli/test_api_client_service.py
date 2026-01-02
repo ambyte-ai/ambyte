@@ -19,10 +19,17 @@ def mock_config():
 
 
 @pytest.fixture
-def api_client(mock_config, mock_credentials_file):
-	# Initialize with a valid fake API key
+def api_client(mock_config, mock_credentials_file, monkeypatch):
+	# Ensure environment variable doesn't override file settings
+	monkeypatch.delenv('AMBYTE_API_KEY', raising=False)
+
+	# Initialize with a valid fake API key in the temp credentials file
 	mock_credentials_file(api_key='sk_live_test_123')
-	client = CloudApiClient(mock_config)
+
+	# Prevent CredentialsManager from loading the actual .env file from the root directory
+	with mock.patch('ambyte_cli.services.auth.load_dotenv'):
+		client = CloudApiClient(mock_config)
+
 	return client
 
 
@@ -38,8 +45,11 @@ def test_headers_construction(api_client):
 	assert 'ambyte-cli' in headers['User-Agent']
 
 
-def test_headers_missing_key(mock_config, no_credentials):
-	client = CloudApiClient(mock_config)
+def test_headers_missing_key(mock_config, no_credentials, monkeypatch):
+	# Ensure environment is clean for this test as well
+	monkeypatch.delenv('AMBYTE_API_KEY', raising=False)
+	with mock.patch('ambyte_cli.services.auth.load_dotenv'):
+		client = CloudApiClient(mock_config)
 	headers = client._get_headers()
 	assert headers == {}
 
