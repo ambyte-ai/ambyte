@@ -71,7 +71,11 @@ class ObligationExtractor:
 						# Attach metadata that the LLM doesn't know about
 						# (e.g. filename, page number are known by the wrapper, not the prompt)
 						# We embed this into the rationale or source context for the next step.
-						# For now, the deduplicator handles mapping back, but we can verify here.
+						item.source_metadata = {
+							'chunk_id': str(chunk.chunk_id),
+							'page_number': chunk.metadata.page_number,
+							'section_hierarchy': chunk.metadata.section_hierarchy,
+						}
 						valid_items.append(item)
 					else:
 						logger.warning(

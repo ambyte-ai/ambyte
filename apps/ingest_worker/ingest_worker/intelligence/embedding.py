@@ -82,13 +82,13 @@ class EmbeddingService:
 			except Exception as e:
 				logger.error(f'Failed to embed batch {batch_idx}: {e}')
 				# We raise here because missing embeddings corrupts the document index.
-				# In a robust queue system, this would trigger a job retry. # TODO
+				# The ARQ worker will catch this and retry the entire job.
 				raise
 
 		return all_embeddings
 
 	@retry(
-		retry=retry_if_exception_type(Exception),  # Voyage client might raise generic exceptions on network err
+		retry=retry_if_exception_type(Exception),
 		stop=stop_after_attempt(5),
 		wait=wait_exponential(multiplier=1, min=2, max=60),
 		reraise=True,

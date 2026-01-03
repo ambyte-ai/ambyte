@@ -129,6 +129,10 @@ class ExtractedConstraint(BaseModel):
 	purpose_rule: PurposeRestriction | None = None
 	privacy_rule: PrivacyEnhancementRule | None = None
 	ai_rule: AiModelConstraint | None = None
+	# 5. Metadata (Injected Post-Extraction)
+	source_metadata: dict[str, Any] | None = Field(
+		default=None, description='Context about where this was found (Section ID, Page, etc.)', exclude=True
+	)
 
 
 class ExtractionResult(BaseModel):

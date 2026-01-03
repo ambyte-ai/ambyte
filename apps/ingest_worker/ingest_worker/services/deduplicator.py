@@ -48,9 +48,7 @@ class Deduplicator:
 			master = items[0]
 
 			# We aggregate provenance from all items
-			# In a real legal tool, we might list every section.
-			# For simplicity, we take the most descriptive rationale or concat them. # TODO
-			combined_rationale = self._merge_rationales(items)
+			combined_rationale, primary_section = self._merge_rationales(items)
 
 			# Generate a stable ID
 			# Ideally derived from project + filename + rule hash
@@ -63,6 +61,7 @@ class Deduplicator:
 				master=master,
 				rationale=combined_rationale,
 				filename=filename,
+				section_ref=primary_section,
 			)
 
 			final_obligations.append(obligation)
@@ -99,17 +98,50 @@ class Deduplicator:
 		serialized = json.dumps(logic_fingerprint, sort_keys=True)
 		return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
-	def _merge_rationales(self, items: list[ExtractedConstraint]) -> str:
+	def _merge_rationales(self, items: list[ExtractedConstraint]) -> tuple[str, str | None]:
 		"""
-		Combines rationales.
-		e.g. "Section 4 requires deletion. Also reinforced by Section 12."
+		Combines rationales with their source context.
+		Returns: (Combined String, Primary Section Reference)
 		"""
-		# Dedup identical rationales first
-		unique_texts = {i.rationale for i in items}
-		return ' | '.join(unique_texts)
+		unique_entries = []
+		seen_rationales = set()
+		primary_section = None
+
+		for item in items:
+			# Format: "[Section 3.1 Security]: Data must be encrypted."
+			prefix = ''
+			section_ref = None
+
+			if item.source_metadata:
+				# Try to find the most specific section header
+				hierarchy = item.source_metadata.get('section_hierarchy', [])
+				if hierarchy:
+					# Use the last item in hierarchy (most specific)
+					section_ref = hierarchy[-1]
+					prefix = f'[{section_ref}] '
+
+					# Capture the first valid section ref as primary
+					if not primary_section:
+						primary_section = section_ref
+
+			# Construct the entry
+			full_text = f'{prefix}{item.rationale}'
+
+			if full_text not in seen_rationales:
+				unique_entries.append(full_text)
+				seen_rationales.add(full_text)
+
+		# If we have multiple unique rationales, join them.
+		# If single, just return it.
+		return ' | '.join(unique_entries), primary_section
 
 	def _convert_to_obligation(
-		self, slug: str, master: ExtractedConstraint, rationale: str, filename: str
+		self,
+		slug: str,
+		master: ExtractedConstraint,
+		rationale: str,
+		filename: str,
+		section_ref: str | None,
 	) -> Obligation:
 		"""
 		Maps the intermediate schema to the official DB schema.
@@ -127,8 +159,8 @@ class Deduplicator:
 			provenance=SourceProvenance(
 				source_id=filename,
 				document_type='CONTRACT_UPLOAD',
-				# Ideally we'd extract the specific Section Header here if we passed metadata through # TODO
-				section_reference='Multiple Sections' if ' | ' in rationale else 'Extracted Section',
+				# Use the actual primary section if we found one
+				section_reference=section_ref or 'Extracted Section',
 				document_uri=f's3://uploads/{filename}',  # Placeholder
 			),
 			enforcement_level=EnforcementLevel.BLOCKING,  # Default to strict
