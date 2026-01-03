@@ -7,8 +7,10 @@ from ingest_worker.extractors.chunker import SectionChunker
 from ingest_worker.extractors.pdf_parser import PdfParser
 from ingest_worker.intelligence.embedding import EmbeddingService
 from ingest_worker.intelligence.vector_store import VectorStore
+from ingest_worker.schemas.ingest import IngestStatus
 from ingest_worker.services.deduplicator import Deduplicator
 from ingest_worker.services.definition_extractor import DefinitionExtractor
+from ingest_worker.services.job_store import job_store
 from ingest_worker.services.obligation_extractor import ObligationExtractor
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,7 @@ class IngestionPipeline:
 			# ==================================================================
 			# STEP 1: PARSING (CPU)
 			# ==================================================================
+			await job_store.update_status(job_id, IngestStatus.PARSING, 'Extracting text from PDF...')
 			parse_start = time.time()
 			elements = await run_in_threadpool(self.parser.parse, file, filename)
 
@@ -80,6 +83,7 @@ class IngestionPipeline:
 			# ==================================================================
 			# STEP 2: CHUNKING (CPU)
 			# ==================================================================
+			await job_store.update_status(job_id, IngestStatus.CHUNKING, 'Splitting into semantic chunks...')
 			chunks = self.chunker.chunk(elements, filename)
 			logger.info(f'[{job_id}] Generated {len(chunks)} semantic chunks')
 
@@ -89,6 +93,9 @@ class IngestionPipeline:
 			# ==================================================================
 			# STEP 3: EMBEDDING (GPU/API)
 			# ==================================================================
+			await job_store.update_status(
+				job_id, IngestStatus.EMBEDDING, f'Generating vectors for {len(chunks)} chunks...'
+			)
 			embed_start = time.time()
 			texts = [c.content for c in chunks]
 			vectors = await self.embedder.embed_documents(texts)
@@ -109,6 +116,7 @@ class IngestionPipeline:
 			# STEP 5: PASS 1 - DEFINITIONS (LLM)
 			# ==================================================================
 			# Build the glossary to ground the subsequent rule extraction
+			await job_store.update_status(job_id, IngestStatus.DEFINING, 'Extracting definitions and terms...')
 			def_start = time.time()
 			context = await self.def_extractor.extract(chunks)
 			logger.info(f'[{job_id}] Definitions extracted in {time.time() - def_start:.2f}s')
@@ -116,6 +124,7 @@ class IngestionPipeline:
 			# ==================================================================
 			# STEP 6: PASS 2 - CONSTRAINTS (LLM Parallel)
 			# ==================================================================
+			await job_store.update_status(job_id, IngestStatus.EXTRACTION, 'Extracting legal constraints...')
 			rule_start = time.time()
 			raw_constraints = await self.rule_extractor.extract_all(chunks, context)
 			logger.info(f'[{job_id}] Constraints extracted in {time.time() - rule_start:.2f}s')
@@ -124,6 +133,7 @@ class IngestionPipeline:
 			# STEP 7: PASS 3 - DEDUPLICATION (CPU)
 			# ==================================================================
 			# Flatten redundancy and convert to final Schema
+			await job_store.update_status(job_id, IngestStatus.MERGING, 'Deduplicating and finalizing obligations...')
 			final_obligations = self.deduplicator.merge(raw_constraints, filename=filename, project_id=project_id)
 
 			total_duration = time.time() - start_time

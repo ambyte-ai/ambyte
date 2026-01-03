@@ -20,8 +20,10 @@ class EmbeddingService:
 	"""
 
 	def __init__(self):
-		# Initialize the Async client
+		# Initialize the Async client.
+		# Voyage's AsyncClient creates ephemeral aiohttp sessions per request by default.
 		self.client = AsyncClient(api_key=settings.voyage_api_key_val)
+
 		self.model = settings.EMBEDDING_MODEL
 		self.batch_size = settings.EMBEDDING_BATCH_SIZE
 
@@ -31,10 +33,10 @@ class EmbeddingService:
 		Automatically splits the input into manageable batches to respect API limits.
 
 		Args:
-		    texts: List of text strings to embed.
+			texts: List of text strings to embed.
 
 		Returns:
-		    A list of vector embeddings (list of floats) corresponding to the inputs.
+			A list of vector embeddings (list of floats) corresponding to the inputs.
 		"""  # noqa: E101
 		return await self._process_batches(texts, input_type='document')
 
@@ -44,10 +46,10 @@ class EmbeddingService:
 		Voyage optimizes retrieval by distinguishing between 'document' and 'query'.
 
 		Args:
-		    text: The search query string.
+			text: The search query string.
 
 		Returns:
-		    A single vector embedding.
+			A single vector embedding.
 		"""  # noqa: E101
 		# Wrap single string in list, extract first result
 		results = await self._process_batches([text], input_type='query')
@@ -104,6 +106,4 @@ class EmbeddingService:
 			truncation=True,  # Safety net if chunker missed a spot
 		)
 
-		# response.embeddings is the list of vectors
-		# The library types this as (List[List[float]] | List[List[int]]) but we know it's always floats for this model.
 		return cast(list[list[float]], response.embeddings)

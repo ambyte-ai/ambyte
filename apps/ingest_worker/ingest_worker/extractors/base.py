@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import BinaryIO
 
-# "Element" is the base class for NarrativeText, Title, ListItem, etc.
-# in the unstructured library.
 from unstructured.documents.elements import Element
 
 

@@ -47,6 +47,14 @@ class Settings(BaseSettings):
 	QDRANT_COLLECTION_NAME: str = 'ambyte_legal_docs'
 
 	# ==========================================================================
+	# Job Store (Redis)
+	# ==========================================================================
+	REDIS_JOB_STORE_URL: str = Field(
+		default='redis://redis:6379/0',
+		description='Redis URL for job state persistence. DB 0 reserved for jobs.',
+	)
+
+	# ==========================================================================
 	# Embeddings (Voyage AI)
 	# ==========================================================================
 	# We use Voyage AI for domain-specific legal embeddings (SOTA for law).
@@ -87,6 +95,10 @@ class Settings(BaseSettings):
 	@property
 	def openai_api_key_val(self) -> str:
 		return self.OPENAI_API_KEY.get_secret_value()
+
+	@property
+	def log_level_value(self) -> str:
+		return self.LOG_LEVEL
 
 
 # Singleton Accessor

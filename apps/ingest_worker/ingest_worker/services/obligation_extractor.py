@@ -98,7 +98,11 @@ class ObligationExtractor:
 		# 1. Normalize both strings
 		# Remove all whitespace, newlines, and convert to lower case
 		def normalize(s: str) -> str:
-			return re.sub(r'\s+', '', s).lower()
+			# Remove whitespace
+			s = re.sub(r'\s+', '', s).lower()
+			# Remove surrounding quotes that the LLM might have hallucinated
+			s = s.strip('"').strip("'")
+			return s
 
 		clean_quote = normalize(quote)
 		clean_text = normalize(full_text)

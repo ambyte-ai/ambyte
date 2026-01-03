@@ -1,13 +1,13 @@
 import logging
-import os
 import shutil
-import tempfile
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
+from arq import ArqRedis, create_pool
+from arq.connections import RedisSettings
 from fastapi import (
-	BackgroundTasks,
 	FastAPI,
 	File,
 	Form,
@@ -16,14 +16,14 @@ from fastapi import (
 	status,
 )
 from fastapi.concurrency import run_in_threadpool
+from ingest_worker.config import settings
 from ingest_worker.extractors.chunker import SectionChunker
 from ingest_worker.extractors.pdf_parser import PdfParser
 from ingest_worker.schemas.ingest import (
 	DocumentChunk,
 	IngestJobResponse,
-	IngestStatus,
 )
-from ingest_worker.services.pipeline import IngestionPipeline
+from ingest_worker.services.job_store import job_store
 
 # Configure logging
 logging.basicConfig(
@@ -36,12 +36,11 @@ logger = logging.getLogger('ambyte-ingest')
 # Global State
 # ==============================================================================
 
-# The Orchestrator
-pipeline = IngestionPipeline()
+# ARQ Redis connection pool for enqueuing jobs
+redis_pool: ArqRedis | None = None
 
-# In-Memory Job Store (MVP)
-# In production, replace this with Redis/Postgres # TODO
-job_store: dict[str, IngestJobResponse] = {}
+# Staging directory for uploaded files (shared volume in Docker)
+STAGING_DIR = Path('/var/lib/ambyte/staging')
 
 
 # ==============================================================================
@@ -53,57 +52,22 @@ job_store: dict[str, IngestJobResponse] = {}
 async def lifespan(app: FastAPI):
 	"""
 	Application startup/shutdown hooks.
-	Ensures the Vector Database schema exists before accepting requests.
+	Initializes Redis pool for job enqueueing.
 	"""
+	global redis_pool
 	try:
-		await pipeline.initialize()
+		# Connect to Redis for job queue
+		redis_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_JOB_STORE_URL))
+		await job_store.initialize()
+		logger.info('Ingest API ready. Redis pool initialized.')
 		yield
 	except Exception as e:
 		logger.critical(f'Failed to initialize Ingest Worker: {e}')
 		raise
-
-
-async def background_ingest_task(job_id: str, temp_file_path: str, filename: str, project_id: str | None):
-	"""
-	The actual worker logic running in the background.
-	"""
-	logger.info(f'[{job_id}] Started background processing for {filename}')
-
-	# Update status to processing
-	if job_id in job_store:
-		job_store[job_id].status = IngestStatus.PARSING
-
-	try:
-		# Run the full Parsing -> Chunking -> Embedding -> Qdrant pipeline
-		# Note: We pass the path directly so the parsing (CPU bound) step
-		# can handle file opening in its own threadpool/process rather than blocking here.
-		stats = await pipeline.run(
-			file=temp_file_path,
-			filename=filename,
-			job_id=job_id,
-			project_id=project_id,
-		)
-
-		# Update Success State
-		if job_id in job_store:
-			job_store[job_id].status = IngestStatus.COMPLETED
-			job_store[job_id].stats = stats
-			job_store[job_id].message = 'Ingestion successful'
-
-	except Exception as e:
-		logger.error(f'[{job_id}] Background task failed: {e}', exc_info=True)
-		if job_id in job_store:
-			job_store[job_id].status = IngestStatus.FAILED
-			job_store[job_id].message = str(e)
-
 	finally:
-		# Cleanup: Remove the temporary file to save disk space
-		try:
-			if os.path.exists(temp_file_path):
-				os.remove(temp_file_path)
-				logger.debug(f'[{job_id}] Cleaned up temp file {temp_file_path}')
-		except Exception as cleanup_err:
-			logger.warning(f'[{job_id}] Failed to cleanup temp file: {cleanup_err}')
+		if redis_pool:
+			await redis_pool.close()
+		await job_store.close()
 
 
 # ==============================================================================
@@ -137,15 +101,19 @@ def _save_to_disk(source_file, dest_path: str):
 	description='Uploads a file for background processing. Returns a Job ID to poll.',
 )
 async def trigger_ingestion(
-	background_tasks: BackgroundTasks,
 	file: Annotated[UploadFile, File(description='PDF Document')],
 	project_id: Annotated[str | None, Form(description='Project context for these policies')] = None,
 ):
 	"""
 	1. Spools file to disk (safe for large PDFs).
-	2. Spawns background task.
+	2. Enqueues job to ARQ worker.
 	3. Returns Job ID immediately.
 	"""
+	if redis_pool is None:
+		raise HTTPException(
+			status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+			detail='Job queue not available.',
+		)
 
 	if file.content_type != 'application/pdf':
 		raise HTTPException(
@@ -157,33 +125,27 @@ async def trigger_ingestion(
 	filename = file.filename or 'unknown.pdf'
 
 	try:
-		# Create a temp file to persist the upload for the background worker
-		# We cannot pass UploadFile directly to background tasks as it closes
-		# when the request ends.
-		fd, temp_path = tempfile.mkstemp(suffix='.pdf')
-		os.close(fd)  # Close the low-level handle, we will write via python file obj
+		# Write file to staging volume for background worker
+		# Using job_id ensures unique filenames and easy correlation
+		STAGING_DIR.mkdir(parents=True, exist_ok=True)
+		staging_path = STAGING_DIR / f'{job_id}.pdf'
 
-		# Stream copy to temp location (in threadpool to avoid blocking)
-		await run_in_threadpool(_save_to_disk, file.file, temp_path)
+		# Stream copy to staging location (in threadpool to avoid blocking)
+		await run_in_threadpool(_save_to_disk, file.file, str(staging_path))
 
-		# Initialize Job State
-		job_info = IngestJobResponse(
+		# Initialize Job State in Redis
+		job_info = await job_store.create_job(job_id)
+
+		# Enqueue job to ARQ worker process
+		await redis_pool.enqueue_job(
+			'run_ingest_pipeline',
 			job_id=job_id,
-			status=IngestStatus.QUEUED,
-			message='File accepted for processing.',
-		)
-		job_store[job_id] = job_info
-
-		# Schedule the work
-		background_tasks.add_task(
-			background_ingest_task,
-			job_id=job_id,
-			temp_file_path=temp_path,
+			file_path=str(staging_path),
 			filename=filename,
 			project_id=project_id,
 		)
 
-		logger.info(f'[{job_id}] Queued ingestion for {filename}')
+		logger.info(f'[{job_id}] Enqueued ingestion job for {filename}')
 		return job_info
 
 	except Exception as e:
@@ -205,9 +167,10 @@ async def get_job_status(job_id: str):
 	"""
 	Poll this endpoint to check if parsing/indexing is complete.
 	"""
-	if job_id not in job_store:
+	job = await job_store.get_job(job_id)
+	if job is None:
 		raise HTTPException(status_code=404, detail='Job not found')
-	return job_store[job_id]
+	return job
 
 
 # ==============================================================================

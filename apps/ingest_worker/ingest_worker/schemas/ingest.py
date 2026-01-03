@@ -9,7 +9,7 @@ from ambyte_schemas.models.obligation import (
 	PurposeRestriction,
 	RetentionRule,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class IngestStatus(StrEnum):
@@ -154,7 +154,12 @@ class IngestRequest(BaseModel):
 class IngestJobResponse(BaseModel):
 	"""
 	API Response for job tracking.
+	Configured to allow seamless serialization/deserialization from Redis JSON.
 	"""
+
+	# Ensures the Enum (IngestStatus) is treated as a primitive string
+	# when dumping to JSON/Redis, preventing object reconstruction issues.
+	model_config = ConfigDict(use_enum_values=True)
 
 	job_id: str
 	status: IngestStatus

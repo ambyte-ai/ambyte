@@ -27,23 +27,48 @@ services:
              uv run uvicorn src.main:app --host 0.0.0.0 --port 8000"
 
   # ============================================================================
-  # INGEST WORKER (AI Processing Pipeline)
+  # INGEST API (File Upload & Job Submission)
   # ============================================================================
-  ingest:
+  ingest-api:
     build:
       context: ../../ # Points to repo root to capture shared schemas/packages
       dockerfile: apps/ingest_worker/Dockerfile
-    container_name: ambyte-ingest
+    container_name: ambyte-ingest-api
     restart: always
     ports:
-      - "8001:8000" # Mapped to 8001 to allow side-by-side running with API
+      - "8001:8000"
     environment:
       - AMBYTE_INGEST_QDRANT_URL=http://qdrant:6333
-      # Secrets must be provided in the shell environment or a .env file
+      - AMBYTE_INGEST_REDIS_JOB_STORE_URL=redis://redis:6379/0
       - AMBYTE_INGEST_VOYAGE_API_KEY=${VOYAGE_API_KEY}
       - AMBYTE_INGEST_OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ambyte_ingest_staging:/var/lib/ambyte/staging
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: uv run uvicorn ingest_worker.main:app --host 0.0.0.0 --port 8000
+
+  # ============================================================================
+  # INGEST WORKER (AI Processing Pipeline)
+  # ============================================================================
+  ingest-worker:
+    build:
+      context: ../../
+      dockerfile: apps/ingest_worker/Dockerfile
+    container_name: ambyte-ingest-worker
+    restart: always
+    environment:
+      - AMBYTE_INGEST_QDRANT_URL=http://qdrant:6333
+      - AMBYTE_INGEST_REDIS_JOB_STORE_URL=redis://redis:6379/0
+      - AMBYTE_INGEST_VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      - AMBYTE_INGEST_OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ambyte_ingest_staging:/var/lib/ambyte/staging
     depends_on:
       - qdrant
+      - redis
+    command: uv run arq ingest_worker.worker.WorkerSettings
 
   # ============================================================================
   # INFRASTRUCTURE (State Stores)
@@ -93,3 +118,4 @@ volumes:
   ambyte_pg_data:
   ambyte_redis_data:
   ambyte_qdrant_data:
+  ambyte_ingest_staging:
