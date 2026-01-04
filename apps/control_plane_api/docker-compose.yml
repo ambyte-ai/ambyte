@@ -42,10 +42,17 @@ services:
       - AMBYTE_INGEST_REDIS_JOB_STORE_URL=redis://redis:6379/0
       - AMBYTE_INGEST_VOYAGE_API_KEY=${VOYAGE_API_KEY}
       - AMBYTE_INGEST_OPENAI_API_KEY=${OPENAI_API_KEY}
-    volumes:
-      - ambyte_ingest_staging:/var/lib/ambyte/staging
+      # MinIO / S3 Configuration
+      - AMBYTE_INGEST_S3_ENDPOINT_URL=http://minio:9000
+      - AMBYTE_INGEST_S3_BUCKET_NAME=ambyte-raw
+      # Boto3 standard credentials (auto-discovered by SDK)
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_DEFAULT_REGION=us-east-1
     depends_on:
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     command: uv run uvicorn ingest_worker.main:app --host 0.0.0.0 --port 8000
 
@@ -63,11 +70,17 @@ services:
       - AMBYTE_INGEST_REDIS_JOB_STORE_URL=redis://redis:6379/0
       - AMBYTE_INGEST_VOYAGE_API_KEY=${VOYAGE_API_KEY}
       - AMBYTE_INGEST_OPENAI_API_KEY=${OPENAI_API_KEY}
-    volumes:
-      - ambyte_ingest_staging:/var/lib/ambyte/staging
+      # MinIO / S3 Configuration
+      - AMBYTE_INGEST_S3_ENDPOINT_URL=http://minio:9000
+      - AMBYTE_INGEST_S3_BUCKET_NAME=ambyte-raw
+      # Boto3 standard credentials (auto-discovered by SDK)
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_DEFAULT_REGION=us-east-1
     depends_on:
       - qdrant
       - redis
+      - minio
     command: uv run arq ingest_worker.worker.WorkerSettings
 
   # ============================================================================
@@ -114,8 +127,43 @@ services:
     volumes:
       - ambyte_qdrant_data:/qdrant/storage
 
+  # ============================================================================
+  # OBJECT STORAGE (MinIO - S3 Compatible)
+  # ============================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: ambyte-minio
+    restart: always
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - ambyte_minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-off job to create the default bucket ('ambyte-raw') on startup
+  create-bucket:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/ambyte-raw --ignore-existing;
+      exit 0;
+      "
+
 volumes:
   ambyte_pg_data:
   ambyte_redis_data:
   ambyte_qdrant_data:
-  ambyte_ingest_staging:
+  ambyte_minio_data:

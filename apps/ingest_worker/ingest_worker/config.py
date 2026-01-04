@@ -55,6 +55,22 @@ class Settings(BaseSettings):
 	)
 
 	# ==========================================================================
+	# Blob Storage (S3 / MinIO)
+	# ==========================================================================
+	S3_ENDPOINT_URL: str = Field(
+		default='http://minio:9000',
+		description='URL for S3-compatible storage (e.g. MinIO, AWS S3)',
+	)
+	S3_BUCKET_NAME: str = Field(
+		default='ambyte-raw',
+		description='Bucket for storing raw uploaded documents.',
+	)
+	S3_REGION: str = Field(
+		default='us-east-1',
+		description='Region for S3-compatible storage (e.g. MinIO, AWS S3)',
+	)
+
+	# ==========================================================================
 	# Embeddings (Voyage AI)
 	# ==========================================================================
 	# We use Voyage AI for domain-specific legal embeddings (SOTA for law).

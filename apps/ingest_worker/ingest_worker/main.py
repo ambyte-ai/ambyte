@@ -2,7 +2,6 @@ import logging
 import shutil
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Annotated
 
 from arq import ArqRedis, create_pool
@@ -24,6 +23,7 @@ from ingest_worker.schemas.ingest import (
 	IngestJobResponse,
 )
 from ingest_worker.services.job_store import job_store
+from ingest_worker.services.storage import blob_storage
 
 # Configure logging
 logging.basicConfig(
@@ -38,9 +38,6 @@ logger = logging.getLogger('ambyte-ingest')
 
 # ARQ Redis connection pool for enqueuing jobs
 redis_pool: ArqRedis | None = None
-
-# Staging directory for uploaded files (shared volume in Docker)
-STAGING_DIR = Path('/var/lib/ambyte/staging')
 
 
 # ==============================================================================
@@ -59,6 +56,10 @@ async def lifespan(app: FastAPI):
 		# Connect to Redis for job queue
 		redis_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_JOB_STORE_URL))
 		await job_store.initialize()
+
+		# Initialize S3 Connection
+		blob_storage.initialize()
+
 		logger.info('Ingest API ready. Redis pool initialized.')
 		yield
 	except Exception as e:
@@ -125,22 +126,21 @@ async def trigger_ingestion(
 	filename = file.filename or 'unknown.pdf'
 
 	try:
-		# Write file to staging volume for background worker
-		# Using job_id ensures unique filenames and easy correlation
-		STAGING_DIR.mkdir(parents=True, exist_ok=True)
-		staging_path = STAGING_DIR / f'{job_id}.pdf'
+		# 1. Upload Stream to S3
+		# We use the job_id as the key for simplicity and uniqueness
+		s3_key = f'{job_id}.pdf'
+		s3_uri = await blob_storage.upload_stream(file_obj=file.file, key=s3_key, content_type=file.content_type)
 
-		# Stream copy to staging location (in threadpool to avoid blocking)
-		await run_in_threadpool(_save_to_disk, file.file, str(staging_path))
-
-		# Initialize Job State in Redis
+		# 2. Initialize Job State
 		job_info = await job_store.create_job(job_id)
 
-		# Enqueue job to ARQ worker process
+		# 3. Enqueue job to ARQ worker process
+		# Instead of a file path, we pass the S3 Key and URI
 		await redis_pool.enqueue_job(
 			'run_ingest_pipeline',
 			job_id=job_id,
-			file_path=str(staging_path),
+			s3_key=s3_key,
+			s3_uri=s3_uri,
 			filename=filename,
 			project_id=project_id,
 		)

@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import tempfile
 from typing import Any
 
 import httpx
@@ -13,6 +14,7 @@ from ingest_worker.services.definition_extractor import DefinitionExtractor
 from ingest_worker.services.job_store import job_store
 from ingest_worker.services.obligation_extractor import ObligationExtractor
 from ingest_worker.services.pipeline import IngestionPipeline
+from ingest_worker.services.storage import blob_storage
 
 # Configure logging for the standalone worker process
 logging.basicConfig(
@@ -56,7 +58,7 @@ NON_RETRYABLE_ERRORS = (
 
 
 async def run_ingest_pipeline(
-	ctx: dict, job_id: str, file_path: str, filename: str, project_id: str | None
+	ctx: dict, job_id: str, s3_key: str, s3_uri: str, filename: str, project_id: str | None
 ) -> dict[str, Any]:
 	"""
 	The core task function executed by the worker.
@@ -64,25 +66,37 @@ async def run_ingest_pipeline(
 	Args:
 	    ctx: ARQ context dictionary (contains initialized pipeline).
 	    job_id: Unique UUID for tracking.
-	    file_path: Absolute path to the PDF in the shared volume.
+	    s3_key: Storage key (e.g. "{job_id}.pdf").
+	    s3_uri: Full URI for reference (s3://bucket/key).
 	    filename: Original filename for metadata.
 	    project_id: Optional tenant/project scope.
 	"""  # noqa: E101
 	pipeline: IngestionPipeline = ctx['pipeline']
 
-	logger.info(f'[{job_id}] Worker received job. File: {file_path}')
+	# Determine a local temporary path for processing
+	# ARQ workers have their own ephemeral filesystem
+
+	# We use tempfile to ensure secure, collision-free paths
+	with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+		local_file_path = tmp.name
+
+	logger.info(f'[{job_id}] Worker received job. Downloading from {s3_uri}...')
 
 	# 1. Update State -> PROCESSING
-	await job_store.update_status(job_id, IngestStatus.PARSING, message='Worker started processing.')
+	await job_store.update_status(job_id, IngestStatus.PARSING, message='Downloading document...')
 
 	try:
-		# 2. Execute the Heavy Lifting
+		# 2. Download from S3
+		await blob_storage.download_file(s3_key, local_file_path)
+
+		# 3. Execute the Heavy Lifting
 		# Note: we pass the file path directly. The pipeline's parser will open it.
 		stats = await pipeline.run(
-			file=file_path,
+			file=local_file_path,
 			filename=filename,
 			job_id=job_id,
 			project_id=project_id,
+			s3_key=s3_key,
 		)
 
 		# 3. Update State -> SUCCESS
@@ -118,14 +132,14 @@ async def run_ingest_pipeline(
 		raise
 
 	finally:
-		# 5. Cleanup: Remove the file from the staging volume
+		# 5. Cleanup: Remove the temp file
 		# We do this regardless of success or failure to prevent disk exhaustion.
-		if os.path.exists(file_path):
+		if os.path.exists(local_file_path):
 			try:
-				os.remove(file_path)
-				logger.debug(f'[{job_id}] Cleaned up staging file: {file_path}')
+				os.remove(local_file_path)
+				logger.debug(f'[{job_id}] Cleaned up temp file: {local_file_path}')
 			except OSError as cleanup_err:
-				logger.warning(f'[{job_id}] Failed to delete staging file: {cleanup_err}')
+				logger.warning(f'[{job_id}] Failed to delete temp file: {cleanup_err}')
 
 
 # ==============================================================================
@@ -142,6 +156,9 @@ async def startup(ctx: dict):
 
 	# Initialize Redis Job Store connection
 	await job_store.initialize()
+
+	# Initialize Blob Storage (MinIO/S3)
+	blob_storage.initialize()
 
 	# Initialize the Pipeline (Connects to Qdrant, verifies schemas)
 	pipeline = IngestionPipeline()
@@ -168,6 +185,7 @@ async def shutdown(ctx: dict):
 	logger.info('Shutting down Worker resources...')
 
 	await job_store.close()
+	blob_storage.close()
 
 
 # ==============================================================================

@@ -59,6 +59,7 @@ class IngestionPipeline:
 		filename: str,
 		job_id: str,
 		project_id: str | None = None,
+		s3_key: str | None = None,
 	) -> dict[str, Any]:
 		"""
 		Executes the full pipeline for a single document.
@@ -134,7 +135,9 @@ class IngestionPipeline:
 			# ==================================================================
 			# Flatten redundancy and convert to final Schema
 			await job_store.update_status(job_id, IngestStatus.MERGING, 'Deduplicating and finalizing obligations...')
-			final_obligations = self.deduplicator.merge(raw_constraints, filename=filename, project_id=project_id)
+			final_obligations = self.deduplicator.merge(
+				raw_constraints, filename=filename, project_id=project_id, s3_key=s3_key
+			)
 
 			total_duration = time.time() - start_time
 			logger.info(

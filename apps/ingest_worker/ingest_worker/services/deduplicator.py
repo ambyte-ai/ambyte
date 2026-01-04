@@ -8,6 +8,7 @@ from ambyte_schemas.models.obligation import (
 	ResourceSelector,
 	SourceProvenance,
 )
+from ingest_worker.config import settings
 from ingest_worker.schemas.ingest import ExtractedConstraint
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,11 @@ class Deduplicator:
 	"""
 
 	def merge(
-		self, raw_constraints: list[ExtractedConstraint], filename: str, project_id: str | None
+		self,
+		raw_constraints: list[ExtractedConstraint],
+		filename: str,
+		project_id: str | None,
+		s3_key: str | None = None,
 	) -> list[Obligation]:
 		logger.info('Starting Pass 3: Deduplication and Merging')
 
@@ -62,6 +67,7 @@ class Deduplicator:
 				rationale=combined_rationale,
 				filename=filename,
 				section_ref=primary_section,
+				s3_key=s3_key,
 			)
 
 			final_obligations.append(obligation)
@@ -142,6 +148,7 @@ class Deduplicator:
 		rationale: str,
 		filename: str,
 		section_ref: str | None,
+		s3_key: str | None,
 	) -> Obligation:
 		"""
 		Maps the intermediate schema to the official DB schema.
@@ -161,7 +168,7 @@ class Deduplicator:
 				document_type='CONTRACT_UPLOAD',
 				# Use the actual primary section if we found one
 				section_reference=section_ref or 'Extracted Section',
-				document_uri=f's3://uploads/{filename}',  # Placeholder
+				document_uri=f's3://{settings.S3_BUCKET_NAME}/{s3_key}' if s3_key else f's3://uploads/{filename}',
 			),
 			enforcement_level=EnforcementLevel.BLOCKING,  # Default to strict
 			target=target,
