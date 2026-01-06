@@ -15,6 +15,7 @@ from fastapi import (
 	status,
 )
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from ingest_worker.config import settings
 from ingest_worker.extractors.chunker import SectionChunker
 from ingest_worker.extractors.pdf_parser import PdfParser
@@ -23,6 +24,7 @@ from ingest_worker.schemas.ingest import (
 	IngestJobResponse,
 )
 from ingest_worker.services.job_store import job_store
+from ingest_worker.services.regulation_indexer import RegulationIndexer
 from ingest_worker.services.storage import blob_storage
 
 # Configure logging
@@ -60,6 +62,12 @@ async def lifespan(app: FastAPI):
 		# Initialize S3 Connection
 		blob_storage.initialize()
 
+		logger.info('Starting Regulatory Knowledge Graph sync...')
+		indexer = RegulationIndexer()
+		await indexer.initialize()
+		await indexer.index_all()
+		logger.info('Regulatory Knowledge Graph ready.')
+
 		logger.info('Ingest API ready. Redis pool initialized.')
 		yield
 	except Exception as e:
@@ -80,6 +88,14 @@ app = FastAPI(
 	version='0.1.0',
 	description='Vector ingestion service for legal documents.',
 	lifespan=lifespan,
+)
+
+app.add_middleware(
+	CORSMiddleware,
+	allow_origins=['*'],
+	allow_credentials=True,
+	allow_methods=['*'],
+	allow_headers=['*'],
 )
 
 

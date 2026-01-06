@@ -49,6 +49,7 @@ class Deduplicator:
 
 		# 2. Consolidation
 		for key, items in groups.items():
+			items.sort(key=lambda x: 1 if x.mapped_regulation_id else 0, reverse=True)
 			# We use the first item as the "Master" for the technical definition
 			master = items[0]
 
@@ -56,8 +57,6 @@ class Deduplicator:
 			combined_rationale, primary_section = self._merge_rationales(items)
 
 			# Generate a stable ID
-			# Ideally derived from project + filename + rule hash
-			# We use the hash we generated earlier
 			stable_slug = f'auto-{key[:12]}'
 
 			# Map the intermediate "ExtractedConstraint" to the final "Obligation"
@@ -154,18 +153,29 @@ class Deduplicator:
 		Maps the intermediate schema to the official DB schema.
 		"""
 
-		# 1. Target Resolution
+		# 1. Determine Source ID & Type
+		# If mapped, the Source is the Regulation (e.g. "GDPR"), not the uploaded file.
+		if master.mapped_regulation_id:
+			source_id = master.mapped_regulation_id.split('::')[0]  # e.g. "EU-GDPR..."
+			doc_type = 'REGULATION'
+			# We append the original filename to rationale so we don't lose the context
+			rationale = f'[Found in {filename}] ' + rationale
+		else:
+			source_id = filename
+			doc_type = 'CONTRACT_UPLOAD'
+
+		# 2. Target Resolution
 		normalized_subject = master.subject.lower().replace(' ', '_')
 		target = ResourceSelector(match_tags={'data_category': normalized_subject})
 
-		# 2. Construct
+		# 3. Construct Obligation
 		return Obligation(
 			id=slug,
 			title=f'{master.category.title()} Rule for {master.subject}',
 			description=rationale,
 			provenance=SourceProvenance(
-				source_id=filename,
-				document_type='CONTRACT_UPLOAD',
+				source_id=source_id,
+				document_type=doc_type,
 				# Use the actual primary section if we found one
 				section_reference=section_ref or 'Extracted Section',
 				document_uri=f's3://{settings.S3_BUCKET_NAME}/{s3_key}' if s3_key else f's3://uploads/{filename}',

@@ -3,6 +3,7 @@ import logging
 import re
 
 from ingest_worker.intelligence.llm_client import LlmClient
+from ingest_worker.intelligence.regulation_search import RegulationSearch
 from ingest_worker.schemas.ingest import (
 	ContractContext,
 	DocumentChunk,
@@ -22,6 +23,7 @@ class ObligationExtractor:
 
 	def __init__(self, concurrency_limit: int = 5):
 		self.llm = LlmClient()
+		self.reg_search = RegulationSearch()
 		# Semaphore to prevent hitting OpenAI rate limits
 		self.semaphore = asyncio.Semaphore(concurrency_limit)
 
@@ -60,8 +62,13 @@ class ObligationExtractor:
 		"""
 		async with self.semaphore:
 			try:
-				# 1. LLM Call
-				result = await self.llm.extract_constraints(chunk.content, context)
+				# 1. Expand Context with RAG (Regulatory Knowledge)
+				# We search for canonical rules that match this text chunk
+				reg_matches = await self.reg_search.find_applicable_rules(chunk.content)
+				reg_context_str = self.reg_search.format_matches_for_prompt(reg_matches)
+
+				# 2. LLM Call
+				result = await self.llm.extract_constraints(chunk.content, context, regulatory_context=reg_context_str)
 
 				valid_items = []
 

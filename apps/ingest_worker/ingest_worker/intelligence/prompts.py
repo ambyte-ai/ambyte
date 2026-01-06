@@ -50,7 +50,16 @@ Output: A list of 'ExtractedConstraint' objects.
    - If the text says "Restricted Data must be encrypted", look up "Restricted Data". 
    - If "Restricted Data" includes "PII", then this rule applies to PII.
 
-3. **ONTOLOGY MAPPING:**
+3. **REGULATORY KNOWLEDGE GRAPH (HIGHEST PRIORITY):**
+   - You may be provided with "MATCHED REGULATION" context blocks.
+   - **IF** the input text refers to the specific regulation concept described in the context 
+      (e.g., GDPR Art 17 "Right to Erasure"), **THEN** you must use the `REQUIRED TECHNICAL CONFIGURATION` 
+      provided in that context.
+   - Copy the values (e.g., `trigger`, `enforcement_level`, `method`) exactly from the context into your output object.
+   - Do not invent your own parameters if a canonical mapping is provided.
+
+4. **ONTOLOGY MAPPING (Fallback):**
+   If no specific regulatory match is found, apply these general heuristics:
 
    **A. RETENTION (Time)**
    - Convert "delete after X" into a duration string (e.g. "30d", "1y", "24h").
@@ -79,19 +88,21 @@ Output: A list of 'ExtractedConstraint' objects.
    - "Anonymized" -> `method = ANONYMIZATION`
    - "Pseudonymized" / "Masked" -> `method = PSEUDONYMIZATION`
 
-4. **IGNORE BOILERPLATE:**
+5. **IGNORE BOILERPLATE:**
    - Ignore general liability, indemnification, or payment terms.
    - ONLY extract data-centric technical constraints.
 """
 
 
-def format_constraint_user_prompt(text_chunk: str, definitions_context: str) -> str:
+def format_constraint_user_prompt(text_chunk: str, definitions_context: str, regulatory_context: str = '') -> str:
 	"""
-	Constructs the prompt for Pass 2, injecting the definitions found in Pass 1.
+	Constructs the prompt for Pass 2, injecting:
+	1. Definitions found in Pass 1.
+	2. Canonical Regulatory Rules found via Vector Search.
 	"""
-	context_block = ''
+	def_block = ''
 	if definitions_context:
-		context_block = f"""
+		def_block = f"""
 ### CONTEXT (DEFINED TERMS):
 The following terms have been defined elsewhere in the document. 
 Use these meanings to interpret the scope of the rules below.
@@ -100,8 +111,20 @@ Use these meanings to interpret the scope of the rules below.
 --------------------------------------------------
 """
 
+	reg_block = ''
+	if regulatory_context:
+		reg_block = f"""
+### CONTEXT (REGULATORY KNOWLEDGE GRAPH):
+The following canonical regulations match the semantic content of the input text.
+If the text is discussing these specific articles, APPLY THE TECHNICAL CONFIGURATION BELOW EXACTLY.
+
+{regulatory_context}
+--------------------------------------------------
+"""
+
 	return f"""
-{context_block}
+{def_block}
+{reg_block}
 
 ### TARGET TEXT:
 Analyze the following text for technical data obligations:

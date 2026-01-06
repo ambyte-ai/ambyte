@@ -116,6 +116,12 @@ class ExtractedConstraint(BaseModel):
 	)
 	rationale: str = Field(..., description='Explain why this text maps to the chosen technical rule.')
 
+	mapped_regulation_id: str | None = Field(
+		default=None,
+		description="If you applied a 'REQUIRED TECHNICAL CONFIGURATION' from the Regulatory Context,"
+		" copy the Regulation ID (e.g., 'EU-GDPR-2016/679::Art.17') exactly as it appears here.",
+	)
+
 	# 3. Scoping (Targeting)
 	subject: str = Field(
 		..., description="The specific data category this applies to (e.g. 'Customer Data', 'Usage Logs')."

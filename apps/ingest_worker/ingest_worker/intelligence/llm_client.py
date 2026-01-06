@@ -70,10 +70,14 @@ class LlmClient:
 		wait=wait_exponential(multiplier=1, min=2, max=30),
 		reraise=True,
 	)
-	async def extract_constraints(self, text_chunk: str, context: ContractContext | None = None) -> ExtractionResult:
+	async def extract_constraints(
+		self, text_chunk: str, context: ContractContext | None = None, regulatory_context: str = ''
+	) -> ExtractionResult:
 		"""
 		PASS 2: Extract technical obligations.
-		Injects the glossary from Pass 1 to resolve ambiguous terms.
+		Injects:
+		1. Glossary (Definitions)
+		2. Knowledge Graph (Canonical Regulations)
 		"""
 		logger.debug('LLM: Extracting constraints...')
 
@@ -89,7 +93,10 @@ class LlmClient:
 				response_model=ExtractionResult,
 				messages=[
 					{'role': 'system', 'content': SYSTEM_PROMPT_CONSTRAINTS},
-					{'role': 'user', 'content': format_constraint_user_prompt(text_chunk, definitions_str)},
+					{
+						'role': 'user',
+						'content': format_constraint_user_prompt(text_chunk, definitions_str, regulatory_context),
+					},
 				],
 				# Slight temperature allows for better reasoning on 'rationale' field
 				temperature=0.1,
