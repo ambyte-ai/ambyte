@@ -50,7 +50,7 @@ class IngestionPipeline:
 		Lifecycle hook: Run on app startup.
 		"""
 		logger.info('Initializing Ingestion Pipeline...')
-		await self.vector_store.ensure_collection()
+		await self.vector_store.ensure_collections()
 		logger.info('Ingestion Pipeline Ready.')
 
 	async def run(

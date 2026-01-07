@@ -1,18 +1,29 @@
-# Git
+# Version Control
 .git
 .gitignore
 
-# Python / UV
-.venv
-.venv*
-__pycache__
-*.pyc
-.pytest_cache
-.mypy_cache
-.ruff_cache
-uv.lock.old
+# Python / UV (Recursive)
+**/.venv
+**/.venv*
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/uv.lock.old
 
-# Artifacts
-dist
-build
-.ambyte
+# Ambyte CLI Local Artifacts (Recursive)
+**/.ambyte
+**/dist
+**/build
+**/egg-info
+**/*.egg-info
+
+# Local IDE settings
+**/.vscode
+**/.idea
+
+# Large temporary files
+**/*.log
+**/*.pdf
+**/tmp

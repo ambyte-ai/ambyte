@@ -57,7 +57,7 @@ RUN uv sync --frozen --no-dev --no-install-project --package ambyte-ingest
 # ==============================================================================
 
 # Install the 'ambyte-ingest' package itself into the environment
-RUN uv sync --frozen --no-dev --package ambyte-ingest
+RUN uv sync --frozen --no-dev --no-cache --package ambyte-ingest && rm -rf /root/.cache/uv
 
 # ==============================================================================
 # 5. Runtime Configuration

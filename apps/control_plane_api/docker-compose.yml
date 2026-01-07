@@ -33,6 +33,7 @@ services:
     build:
       context: ../../ # Points to repo root to capture shared schemas/packages
       dockerfile: apps/ingest_worker/Dockerfile
+      no_cache: true
     container_name: ambyte-ingest-api
     restart: always
     ports:
