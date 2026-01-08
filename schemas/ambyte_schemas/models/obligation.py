@@ -26,6 +26,7 @@ class RetentionTrigger(IntEnum):
 	CREATION_DATE = obligation_pb2.RetentionRule.RETENTION_TRIGGER_CREATION_DATE
 	LAST_ACCESS_DATE = obligation_pb2.RetentionRule.RETENTION_TRIGGER_LAST_ACCESS_DATE
 	EVENT_DATE = obligation_pb2.RetentionRule.RETENTION_TRIGGER_EVENT_DATE
+	DATA_SUBJECT_REQUEST = obligation_pb2.RetentionRule.RETENTION_TRIGGER_DATA_SUBJECT_REQUEST
 
 
 class PrivacyMethod(IntEnum):

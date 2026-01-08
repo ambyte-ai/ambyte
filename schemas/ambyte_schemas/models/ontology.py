@@ -1,8 +1,8 @@
 from datetime import date
-from enum import StrEnum
-from typing import Any
+from enum import Enum, StrEnum
+from typing import Annotated, Any
 
-from pydantic import Field
+from pydantic import BeforeValidator, Field
 
 from ambyte_schemas.models.common import AmbyteBaseModel, RiskSeverity
 from ambyte_schemas.models.obligation import (
@@ -25,21 +25,55 @@ class ConstraintType(StrEnum):
 	AI_MODEL_CONSTRAINT = 'AI_MODEL_CONSTRAINT'
 
 
+def validate_enum_by_name(enum_cls: type[Enum]):
+	"""
+	Returns a validator that converts a string name (e.g. "BLOCKING")
+	into the Enum value (int). Handles prefix mismatches loosely.
+	"""
+
+	def _validate(v: Any) -> Any:
+		if isinstance(v, int):
+			return v
+		if isinstance(v, str):
+			v_upper = v.upper()
+			# 1. Try exact name match
+			try:
+				return enum_cls[v].value
+			except KeyError:
+				pass
+
+			# 2. Fuzzy matching
+			for name, member in enum_cls.__members__.items():
+				# Case A: Enum is Long, Input is Short
+				# (e.g. Enum: ENFORCEMENT_LEVEL_BLOCKING, Input: BLOCKING)
+				if name.endswith(f'_{v_upper}'):
+					return member.value
+
+				# Case B: Enum is Short, Input is Long
+				# (e.g. Enum: HIGH, Input: RISK_SEVERITY_HIGH)
+				if v_upper.endswith(f'_{name}'):
+					return member.value
+
+			raise ValueError(f"'{v}' is not a valid member of {enum_cls.__name__}")
+		return v
+
+	return BeforeValidator(_validate)
+
+
 class TechnicalEnforcement(AmbyteBaseModel):
 	"""
 	The canonical technical definition for a regulatory requirement.
-	This serves as the 'Ground Truth' payload in the Regulation Vector Store.
-
-	Instead of asking an LLM to hallucinate parameters, we inject this object
-	directly into the policy compiler pipeline.
 	"""
 
 	# --- Common Attributes ---
-	action: str | None = Field(default=None, description="The abstract enforcement action (e.g., 'block_deployment').")
-	risk_level: RiskSeverity = Field(default=RiskSeverity.UNSPECIFIED, description='For AI Act / DPIA classification.')
-	tags: list[str] = Field(
-		default_factory=list, description="Tags to apply/check (e.g. ['manipulative', 'subliminal'])."
+	action: str | None = Field(default=None, description='The abstract enforcement action.')
+
+	# Apply Validator to RiskSeverity
+	risk_level: Annotated[RiskSeverity, validate_enum_by_name(RiskSeverity)] = Field(
+		default=RiskSeverity.UNSPECIFIED, description='For AI Act / DPIA classification.'
 	)
+
+	tags: list[str] = Field(default_factory=list, description='Tags to apply/check.')
 
 	# --- Geofencing Specifics ---
 	strict_residency: bool = False
@@ -53,31 +87,47 @@ class TechnicalEnforcement(AmbyteBaseModel):
 	requires_explicit_consent: bool = False
 
 	# --- Privacy Specifics ---
-	method: str | PrivacyMethod = Field(
+	# Apply Validator to PrivacyMethod
+	method: Annotated[PrivacyMethod, validate_enum_by_name(PrivacyMethod)] = Field(
 		default=PrivacyMethod.UNSPECIFIED,
 		description='The privacy enhancing technology required.',
 	)
 	denied_data_categories: list[str] = Field(default_factory=list)
 
 	# --- Retention Specifics ---
-	trigger: str | RetentionTrigger = Field(default=RetentionTrigger.UNSPECIFIED)
+	# Apply Validator to RetentionTrigger
+	trigger: Annotated[RetentionTrigger, validate_enum_by_name(RetentionTrigger)] = Field(
+		default=RetentionTrigger.UNSPECIFIED
+	)
 	sla_duration: str | None = Field(None, description="Time duration string (e.g., '30d', '6m').")
 
 	# --- AI Model Specifics ---
 	require_human_loop: bool = False
 	block_automated_decisions: bool = False
 	requires_bias_mitigation: bool = False
-	check_parameter: str | None = None  # e.g., "training_compute_flops"
-	threshold_value: float | None = None  # e.g., 1e25
+	check_parameter: str | None = None
+	threshold_value: float | None = None
 
 	# --- Context/Lineage Checks ---
 	requires_lineage_check: bool = False
-	context_check: dict[str, Any] = Field(
-		default_factory=dict, description='Complex context matching rules (e.g. domain=WORKPLACE).'
-	)
+	context_check: dict[str, Any] = Field(default_factory=dict, description='Complex context matching rules.')
+	allow_exception_if: str | None = None  # Added field present in yaml
 
 	# --- Documentation ---
 	required_documentation: list[str] = Field(default_factory=list)
+
+	# --- Catch-all for extra YAML fields ---
+	feature_requirement: str | None = None
+	log_retention_period: str | None = None
+	operational_constraint: str | None = None
+	metadata_requirement: str | None = None
+	reporting_requirement: str | None = None
+	required_fields: list[str] = Field(default_factory=list)
+	phase: str | None = None
+	check: str | None = None
+	lineage_check: str | None = None
+	requires_human_authorization: bool = False
+	exception_flow: str | None = None
 
 
 class RegulatoryClassification(AmbyteBaseModel):
@@ -86,13 +136,16 @@ class RegulatoryClassification(AmbyteBaseModel):
 	"""
 
 	type: ConstraintType
-	severity: EnforcementLevel = EnforcementLevel.AUDIT_ONLY
+
+	# Apply Validator to EnforcementLevel
+	severity: Annotated[EnforcementLevel, validate_enum_by_name(EnforcementLevel)] = Field(
+		default=EnforcementLevel.AUDIT_ONLY
+	)
 
 
 class MappingRule(AmbyteBaseModel):
 	"""
 	A single entry in the Knowledge Graph.
-	Maps a specific legal citation to its technical enforcement.
 	"""
 
 	source_reference: str = Field(..., description="e.g., 'Art. 5(1)(a)'")

@@ -77,6 +77,7 @@ message RetentionRule {
     RETENTION_TRIGGER_CREATION_DATE = 1; // From when the row was inserted
     RETENTION_TRIGGER_LAST_ACCESS_DATE = 2; // From when the row was last read
     RETENTION_TRIGGER_EVENT_DATE = 3; // Based on a business event (e.g., "Contract End")
+    RETENTION_TRIGGER_DATA_SUBJECT_REQUEST = 4; // Based on a data subject request (e.g., "Right to be Forgotten")
   }
   RetentionTrigger trigger = 2;
 

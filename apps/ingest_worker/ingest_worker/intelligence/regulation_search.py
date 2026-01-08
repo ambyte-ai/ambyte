@@ -24,7 +24,7 @@ class RegulationSearch:
 		self,
 		text_chunk: str,
 		jurisdiction: str | None = None,
-		threshold: float = 0.78,
+		threshold: float = 0.55,
 		limit: int = 3,
 	) -> list[dict[str, Any]]:
 		"""
@@ -34,7 +34,7 @@ class RegulationSearch:
 		    text_chunk: The raw text from the document being processed.
 		    jurisdiction: Optional filter (e.g. 'EU') to narrow search scope.
 		    threshold: Minimum similarity score (0.0 to 1.0).
-		               Defaults to 0.78 (high precision) to avoid noise.
+		               Defaults to 0.55 (decent precision) to avoid noise.
 		    limit: Max number of matches to return.
 
 		Returns:
@@ -90,7 +90,7 @@ class RegulationSearch:
 					continue
 
 			if matches:
-				logger.debug(f'Found {len(matches)} regulatory matches for chunk.')
+				logger.info(f'Found {len(matches)} regulatory matches for chunk.')
 
 			return matches
 

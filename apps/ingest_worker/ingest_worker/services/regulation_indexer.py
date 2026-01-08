@@ -56,7 +56,7 @@ class RegulationIndexer:
 
 		logger.info(f'Scanning for regulatory mappings in {ontology_dir}...')
 
-		files = list(ontology_dir.glob('*_mappings.yaml'))
+		files = [f for f in ontology_dir.glob('*_mappings.yaml') if f.name != 'snowflake_mappings.yaml']
 		if not files:
 			logger.info('No mapping files found.')
 			return

@@ -12,6 +12,8 @@ from ingest_worker.schemas.ingest import (
 
 logger = logging.getLogger(__name__)
 
+MIN_QUOTE_LENGTH = 10
+
 
 class ObligationExtractor:
 	"""
@@ -113,12 +115,16 @@ class ObligationExtractor:
 			s = re.sub(r'\s+', '', s).lower()
 			# Remove surrounding quotes that the LLM might have hallucinated
 			s = s.strip('"').strip("'")
+			# Remove punctuation
+			s = s.strip('.,;:')
 			return s
 
 		clean_quote = normalize(quote)
 		clean_text = normalize(full_text)
 
-		# 2. Check inclusion
-		# Use a threshold for very short quotes to avoid false positives?
-		# For now, strict inclusion on normalized text is robust enough. # TODO
+		# 2. Length Check (Threshold)
+		if len(clean_quote) < MIN_QUOTE_LENGTH:
+			return False
+
+		# 3. Check inclusion
 		return clean_quote in clean_text
