@@ -71,6 +71,22 @@ async def init_db() -> None:
 		)
 		db.add(api_key)
 
+		# 6. Generate Ingest Worker API Key
+		# Dedicated system key for the ingest-worker service
+		logger.info('🔑 Generating Ingest Worker API Key...')
+
+		ingest_raw_key, ingest_key_hash = security.generate_api_key(prefix='sk_ingest_')
+
+		ingest_api_key = ApiKey(
+			name='Ingest Worker System Key',
+			prefix=ingest_raw_key[:12],
+			key_hash=ingest_key_hash,
+			# Only grant policy:write scope (required by PUT /v1/obligations/)
+			scopes=['policy:write'],
+			project_id=project.id,
+		)
+		db.add(ingest_api_key)
+
 		await db.commit()
 
 		# ======================================================================
@@ -83,11 +99,17 @@ async def init_db() -> None:
 		print(f'Project:       {project.name} ({project.id})')
 		print(f'User:          {user.email}')
 		print('-' * 60)
-		print("YOUR API KEY (Copy this now, it won't be shown again):")
+		print("ADMIN API KEY (Copy this now, it won't be shown again):")
 		print(f'\n👉  {raw_key}  👈\n')
 		print('-' * 60)
-		print('Usage in CLI:')
+		print('INGEST WORKER API KEY (for ingest-worker service):')
+		print(f'\n👉  {ingest_raw_key}  👈\n')
+		print('-' * 60)
+		print('Environment Variables:')
 		print(f'export AMBYTE_API_KEY={raw_key}')
+		print(f'export INGEST_WORKER_API_KEY={ingest_raw_key}')
+		print('-' * 60)
+		print('Usage in CLI:')
 		print('ambyte check --resource urn:test ...')
 		print('=' * 60 + '\n')
 

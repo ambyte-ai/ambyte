@@ -95,6 +95,18 @@ class Settings(BaseSettings):
 	)
 	EXTRACTION_MODEL: str = 'gpt-5.2'
 
+	# ==========================================================================
+	# Control Plane Integration
+	# ==========================================================================
+	CONTROL_PLANE_URL: str = Field(
+		default='http://api:8000',
+		description='URL of the Ambyte Control Plane API (internal Docker URL).',
+	)
+	CONTROL_PLANE_API_KEY: SecretStr = Field(
+		...,
+		description='System API Key for authenticating with Control Plane (policy:write scope).',
+	)
+
 	@computed_field
 	@property
 	def is_local(self) -> bool:
@@ -111,6 +123,10 @@ class Settings(BaseSettings):
 	@property
 	def openai_api_key_val(self) -> str:
 		return self.OPENAI_API_KEY.get_secret_value()
+
+	@property
+	def control_plane_api_key_val(self) -> str:
+		return self.CONTROL_PLANE_API_KEY.get_secret_value()
 
 	@property
 	def log_level_value(self) -> str:

@@ -24,6 +24,7 @@ class IngestStatus(StrEnum):
 	DEFINING = 'DEFINING'  # (Pass 1) Extracting Definitions
 	EXTRACTION = 'EXTRACTION'  # (Pass 2) Extracting Rules
 	MERGING = 'MERGING'  # (Pass 3) Deduplication
+	SYNCING = 'SYNCING'  # Pushing to Control Plane
 	COMPLETED = 'COMPLETED'
 	FAILED = 'FAILED'
 

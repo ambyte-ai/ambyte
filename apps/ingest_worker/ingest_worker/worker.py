@@ -6,10 +6,12 @@ from typing import Any
 
 import httpx
 import openai
+from ambyte_schemas.models.obligation import Obligation
 from arq import Retry
 from arq.connections import RedisSettings
 from ingest_worker.config import settings
 from ingest_worker.schemas.ingest import IngestStatus
+from ingest_worker.services.control_plane_client import ControlPlaneClient
 from ingest_worker.services.definition_extractor import DefinitionExtractor
 from ingest_worker.services.job_store import job_store
 from ingest_worker.services.obligation_extractor import ObligationExtractor
@@ -99,7 +101,29 @@ async def run_ingest_pipeline(
 			s3_key=s3_key,
 		)
 
-		# 3. Update State -> SUCCESS
+		# 4. Sync to Control Plane (if project context exists)
+		stats['synced_to_cloud'] = False
+		if project_id and stats.get('obligations'):
+			try:
+				await job_store.update_status(job_id, IngestStatus.SYNCING, 'Pushing obligations to Control Plane...')
+
+				# Reconstruct Obligation models from serialized dicts
+				obligations = [Obligation(**ob) for ob in stats['obligations']]
+
+				# Use the ControlPlaneClient from context (initialized at startup)
+				control_plane: ControlPlaneClient = ctx['control_plane']
+				await control_plane.push_obligations(project_id, obligations)
+
+				stats['synced_to_cloud'] = True
+				logger.info(f'[{job_id}] Synced {len(obligations)} obligations to Control Plane.')
+			except Exception as sync_err:
+				# Don't fail the whole job if sync fails - obligations are still in stats
+				logger.error(f'[{job_id}] Failed to sync to Control Plane: {sync_err}', exc_info=True)
+				stats['sync_error'] = str(sync_err)
+		else:
+			logger.info(f'[{job_id}] Skipping Control Plane sync (no project_id or no obligations).')
+
+		# 5. Update State -> SUCCESS
 		await job_store.set_result(job_id, stats)
 		logger.info(f'[{job_id}] Job completed successfully.')
 		return stats
@@ -172,8 +196,13 @@ async def startup(ctx: dict):
 	# VoyageAI client manages its own connection pool internally
 	# we just ensure the service is ready
 
+	# Initialize Control Plane Client for syncing obligations
+	logger.info('Initializing Control Plane client...')
+	control_plane = ControlPlaneClient()
+
 	# Store in context for access inside jobs
 	ctx['pipeline'] = pipeline
+	ctx['control_plane'] = control_plane
 	logger.info('Worker resources ready.')
 
 
@@ -183,6 +212,10 @@ async def shutdown(ctx: dict):
 	Gracefully close connections.
 	"""
 	logger.info('Shutting down Worker resources...')
+
+	# Close Control Plane client connection pool
+	if 'control_plane' in ctx:
+		await ctx['control_plane'].close()
 
 	await job_store.close()
 	blob_storage.close()
