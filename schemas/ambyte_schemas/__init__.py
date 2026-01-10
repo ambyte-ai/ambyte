@@ -5,6 +5,12 @@ _proto_dir = os.path.join(os.path.dirname(__file__), 'proto')
 if _proto_dir not in sys.path:
 	sys.path.append(_proto_dir)
 
+from ambyte_schemas.models.audit import (  # noqa: E402
+	AuditBlockHeader,
+	AuditLogEntry,
+	AuditProof,
+	PolicyEvaluationTrace,
+)
 
 # Expose the Pydantic models as the primary API
 from ambyte_schemas.models.common import (  # noqa: E402
@@ -73,4 +79,9 @@ __all__ = [
 	'RetentionRule',
 	'RetentionTrigger',
 	'SourceProvenance',
+	# Audit
+	'AuditLogEntry',
+	'AuditBlockHeader',
+	'AuditProof',
+	'PolicyEvaluationTrace',
 ]

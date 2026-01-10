@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import VerifyScope, get_current_project
 from src.db.models.tenancy import Project
 from src.db.session import get_db
-from src.schemas.audit import AuditLogCreate
+from src.schemas.audit import AuditLogCreate, ReasonTrace
 from src.schemas.check import CheckRequest, CheckResponse
 from src.services.audit_service import AuditService
 from src.services.decision_service import DecisionService
@@ -46,8 +46,10 @@ async def check_access(
 			resource_urn=payload.resource_urn,
 			action=payload.action,
 			decision='ALLOW' if result.allowed else 'DENY',
-			# We store the reason string in the trace for simple debugging
-			reason_trace={'reason': result.reason, 'cache_hit': result.cache_hit},
+			# We store the reason string in the trace for simple debugging. TODO: Check this later.
+			reason_trace=ReasonTrace(
+				decision_reason=result.reason, cache_hit=result.cache_hit, resolved_policy_hash=None
+			),
 			request_context=payload.context,
 		)
 		# We await this to ensure it's durable.

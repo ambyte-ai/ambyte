@@ -79,7 +79,7 @@ async def init_db() -> None:
 
 		ingest_api_key = ApiKey(
 			name='Ingest Worker System Key',
-			prefix=ingest_raw_key[:12],
+			prefix=ingest_raw_key[:10],
 			key_hash=ingest_key_hash,
 			# Only grant policy:write scope (required by PUT /v1/obligations/)
 			scopes=['policy:write'],

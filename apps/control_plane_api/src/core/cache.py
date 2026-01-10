@@ -1,5 +1,5 @@
 import logging
-from typing import TypeVar
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel
 from redis.asyncio import Redis, from_url
@@ -15,6 +15,7 @@ class CacheService:
 	"""
 	Async wrapper around Redis for caching Policy decisions.
 	Handles Pydantic serialization/deserialization automatically.
+	Also provides Redis Streams support for high-speed buffering.
 	"""
 
 	def __init__(self):
@@ -85,6 +86,72 @@ class CacheService:
 				logger.info(f"Invalidated {len(keys)} cache keys matching '{pattern}'")
 		except Exception as e:
 			logger.error(f"Cache invalidation failed for '{pattern}': {e}")
+
+	# ==========================================================================
+	# Redis Streams Support (for Audit Log Buffering)
+	# ==========================================================================
+
+	async def xadd(
+		self, stream: str, fields: dict[str, Any], maxlen: int | None = None, approximate: bool = True
+	) -> str | None:
+		"""
+		Add an entry to a Redis Stream.
+
+		Args:
+		    stream: The stream key (e.g., "audit:logs:{project_id}")
+		    fields: Dictionary of field-value pairs to store
+		    maxlen: Optional max stream length (for automatic trimming)
+		    approximate: If True, uses ~ for more efficient trimming
+
+		Returns:
+		    The auto-generated entry ID (timestamp-based), or None on error.
+		"""  # noqa: E101
+		if not self._redis:
+			return None
+
+		try:
+			entry_id = await self._redis.xadd(stream, cast(Any, fields), maxlen=maxlen, approximate=approximate)
+			return entry_id
+		except Exception as e:
+			logger.error(f'Stream XADD error for {stream}: {e}')
+			return None
+
+	async def xadd_pipeline(self, stream: str, entries: list[dict[str, Any]], maxlen: int | None = None) -> int:
+		"""
+		Batch add multiple entries to a Redis Stream using pipelining.
+		Significantly faster than individual XADD calls for bulk ingestion.
+
+		Args:
+		    stream: The stream key
+		    entries: List of field dictionaries to add
+		    maxlen: Optional max stream length
+
+		Returns:
+		    Number of entries successfully added.
+		"""  # noqa: E101
+		if not self._redis or not entries:
+			return 0
+
+		try:
+			async with self._redis.pipeline(transaction=False) as pipe:
+				for fields in entries:
+					pipe.xadd(stream, cast(Any, fields), maxlen=maxlen, approximate=True)
+				results = await pipe.execute()
+			# Count successful additions (non-None results)
+			return sum(1 for r in results if r is not None)
+		except Exception as e:
+			logger.error(f'Stream XADD pipeline error for {stream}: {e}')
+			return 0
+
+	async def xlen(self, stream: str) -> int:
+		"""Get the number of entries in a stream."""
+		if not self._redis:
+			return 0
+		try:
+			return await self._redis.xlen(stream)
+		except Exception as e:
+			logger.warning(f'Stream XLEN error for {stream}: {e}')
+			return 0
 
 	@property
 	def client(self) -> Redis:

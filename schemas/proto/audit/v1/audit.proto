@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package audit.v1;
+
+import "common/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// =============================================================================
+// Core Log Structure
+// =============================================================================
+
+// Represents a single, atomic access attempt or policy check.
+// This message serves as the "Leaf" in the Merkle Tree.
+message AuditLogEntry {
+  // Unique UUIDv4 for this log entry.
+  string id = 1;
+
+  // Exact time the decision was made.
+  google.protobuf.Timestamp timestamp = 2;
+
+  // The entity attempting the action.
+  common.v1.Actor actor = 3;
+
+  // The target resource (URN).
+  // e.g. "urn:ambyte:snowflake:prod:sales_db:customers"
+  string resource_urn = 4;
+
+  // The operation attempted.
+  // e.g. "SELECT", "ai_training_run", "s3:GetObject"
+  string action = 5;
+
+  // The outcome of the policy evaluation.
+  Decision decision = 6;
+
+  // The "Why". Links the decision back to specific logic.
+  PolicyEvaluationTrace evaluation_trace = 7;
+
+  // Arbitrary context provided at runtime (e.g. {"geo": "US", "app_version": "1.2"}).
+  // This is crucial for reproducing the decision later.
+  google.protobuf.Struct request_context = 8;
+
+  // Cryptographic metadata.
+  // The SHA-256 hash of the canonical JSON representation of fields 1-8.
+  string entry_hash = 9;
+}
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_ALLOW = 1;
+  DECISION_DENY = 2;
+
+  // Dry run / Shadow mode (Policy would have blocked, but system was configured to Allow)
+  DECISION_DRY_RUN_DENY = 3;
+}
+
+// =============================================================================
+// Traceability & Provenance
+// =============================================================================
+
+// Captures the state of the Policy Engine at the moment of decision.
+message PolicyEvaluationTrace {
+  // A human-readable summary.
+  // e.g. "Blocked by GDPR Art 17 Retention Policy"
+  string reason_summary = 1;
+
+  // The specific Obligation IDs that triggered a DENY (or force-allowed).
+  // Matches `obligations.slug` in the database.
+  repeated string contributing_obligation_ids = 2;
+
+  // Hash of the ResolvedPolicy object used.
+  // Allows us to prove exactly WHICH version of the policy was active.
+  string policy_version_hash = 3;
+
+  // Was this result served from Redis?
+  bool cache_hit = 4;
+}
+
+// =============================================================================
+// Cryptographic Proof (The "Block")
+// =============================================================================
+
+// Represents a sealed time-window of logs (e.g., 1 hour of activity).
+// This structure essentially forms a private blockchain.
+message AuditBlockHeader {
+  // UUID for this block.
+  string id = 1;
+
+  // Monotonically increasing index (Genesis block = 0).
+  uint64 sequence_index = 2;
+
+  // The hash of the previous block's header.
+  // This chains the blocks together; modifying an old block invalidates all future blocks.
+  string prev_block_hash = 3;
+
+  // The Root Hash of the Merkle Tree constructed from all `AuditLogEntry.entry_hash`
+  // items in this time window.
+  string merkle_root = 4;
+
+  // Time range covered by this block.
+  google.protobuf.Timestamp timestamp_start = 5;
+  google.protobuf.Timestamp timestamp_end = 6;
+
+  // Count of logs in this block.
+  uint64 log_count = 7;
+
+  // Digital Signature of this Header (fields 1-7) by the Ambyte System Private Key.
+  // Algorithm: Ed25519 or RSA-4096.
+  bytes signature = 8;
+}
+
+// =============================================================================
+// Verification Artifacts
+// =============================================================================
+
+// Response object for `ambyte audit verify --log-id <UUID>`
+message AuditProof {
+  // The original log entry.
+  AuditLogEntry entry = 1;
+
+  // The block header containing the Merkle Root.
+  AuditBlockHeader block_header = 2;
+
+  // The sibling hashes required to recompute the Merkle Root from the entry.
+  repeated string merkle_siblings = 3;
+}

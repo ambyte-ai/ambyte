@@ -50,6 +50,9 @@ services:
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_DEFAULT_REGION=us-east-1
+      # Control Plane Integration (required by shared config)
+      - AMBYTE_INGEST_CONTROL_PLANE_URL=http://api:8000
+      - AMBYTE_INGEST_CONTROL_PLANE_API_KEY=${INGEST_WORKER_API_KEY}
     depends_on:
       redis:
         condition: service_healthy

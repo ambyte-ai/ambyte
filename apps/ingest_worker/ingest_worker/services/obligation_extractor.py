@@ -66,7 +66,7 @@ class ObligationExtractor:
 			try:
 				# 1. Expand Context with RAG (Regulatory Knowledge)
 				# We search for canonical rules that match this text chunk
-				reg_matches = await self.reg_search.find_applicable_rules(chunk.content)
+				reg_matches = await self.reg_search.find_applicable_rules(chunk.content, threshold=0.35)
 				reg_context_str = self.reg_search.format_matches_for_prompt(reg_matches)
 
 				# 2. LLM Call

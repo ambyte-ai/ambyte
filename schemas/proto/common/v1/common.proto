@@ -68,7 +68,7 @@ message Actor {
   // Roles or groups this actor belongs to (e.g., "DataScientists", "Admins").
   repeated string roles = 3;
 
-  // ABAC Attributes. 
+  // ABAC Attributes.
   // e.g. {"location": "US", "compliance_cert": "EU_US_DPF", "clearance": "L2"}
   map<string, string> attributes = 4;
 }
