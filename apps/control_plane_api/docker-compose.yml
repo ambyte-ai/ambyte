@@ -27,6 +27,30 @@ services:
              uv run uvicorn src.main:app --host 0.0.0.0 --port 8000"
 
   # ============================================================================
+  # AUDIT WORKER (Log Processing & Hashing)
+  # ============================================================================
+  audit-worker:
+    build:
+      context: ../../
+      dockerfile: apps/audit-log/Dockerfile
+    container_name: ambyte-audit-worker
+    restart: always
+    ports:
+      - "8002:8002" # Health check port
+    environment:
+      - AMBYTE_AUDIT_REDIS_URL=redis://redis:6379/0
+      - AMBYTE_AUDIT_DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/ambyte
+      - AMBYTE_AUDIT_LOG_LEVEL=INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      # Wait for API to run migrations first to ensure audit_logs table exists
+      api:
+        condition: service_started
+
+  # ============================================================================
   # INGEST API (File Upload & Job Submission)
   # ============================================================================
   ingest-api:

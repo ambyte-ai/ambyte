@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.core.hashing import compute_entry_hash
 from src.db.models.audit import AuditLog
 from src.schemas.audit import AuditLogCreate
 from src.services.audit_buffer import audit_buffer
@@ -28,7 +29,7 @@ class AuditService:
 		Sub-millisecond latency, decoupled from database writes.
 
 		Returns:
-		    The stream entry ID, or None on error.
+			The stream entry ID, or None on error.
 		"""  # noqa: E101
 		return await audit_buffer.push(project_id, entry)
 
@@ -39,7 +40,7 @@ class AuditService:
 		Uses pipelining for maximum throughput.
 
 		Returns:
-		    Number of entries successfully buffered.
+			Number of entries successfully buffered.
 		"""  # noqa: E101
 		return await audit_buffer.push_batch(project_id, entries)
 
@@ -53,9 +54,15 @@ class AuditService:
 		Write a single audit entry directly to Postgres.
 		Used by the Decision Engine synchronously (or via BackgroundTask).
 		"""
-		# Serialize ReasonTrace to dict for JSONB storage
-		reason_trace_data = entry.reason_trace.model_dump() if entry.reason_trace else None
+		# 1. Prepare Data
+		# We need the dictionary representation for hashing
+		entry_dict = entry.model_dump(mode='json', exclude_none=True)
 
+		# 2. Compute Hash
+		entry_hash = compute_entry_hash(entry_dict)
+
+		# 3. Serialize nested fields for DB (JSONB)
+		reason_trace_data = entry.reason_trace.model_dump() if entry.reason_trace else None
 		db_obj = AuditLog(
 			project_id=project_id,
 			timestamp=entry.timestamp,
@@ -65,6 +72,7 @@ class AuditService:
 			decision=entry.decision,
 			reason_trace=reason_trace_data,
 			request_context=entry.request_context,
+			entry_hash=entry_hash,
 		)
 		db.add(db_obj)
 		await db.commit()
@@ -80,20 +88,26 @@ class AuditService:
 		if not entries:
 			return 0
 
-		# Convert Pydantic -> DB Objects
-		db_objects = [
-			AuditLog(
-				project_id=project_id,
-				timestamp=entry.timestamp,
-				actor_id=entry.actor_id,
-				resource_urn=entry.resource_urn,
-				action=entry.action,
-				decision=entry.decision,
-				reason_trace=entry.reason_trace.model_dump() if entry.reason_trace else None,
-				request_context=entry.request_context,
+		db_objects = []
+		for entry in entries:
+			# 1. Compute Hash
+			entry_dict = entry.model_dump(mode='json', exclude_none=True)
+			entry_hash = compute_entry_hash(entry_dict)
+
+			# 2. Create DB Object
+			db_objects.append(
+				AuditLog(
+					project_id=project_id,
+					timestamp=entry.timestamp,
+					actor_id=entry.actor_id,
+					resource_urn=entry.resource_urn,
+					action=entry.action,
+					decision=entry.decision,
+					reason_trace=entry.reason_trace.model_dump() if entry.reason_trace else None,
+					request_context=entry.request_context,
+					entry_hash=entry_hash,
+				)
 			)
-			for entry in entries
-		]
 
 		# Use bulk save for performance
 		db.add_all(db_objects)

@@ -220,16 +220,24 @@ source = { virtual = "apps/audit-log" }
 dependencies = [
     { name = "ambyte-schemas" },
     { name = "cryptography" },
+    { name = "fastapi" },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "redis" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "ambyte-schemas", editable = "schemas" },
     { name = "cryptography", specifier = ">=46.0.3" },
+    { name = "fastapi", specifier = ">=0.117.1" },
     { name = "pydantic", specifier = ">=2.12.4" },
+    { name = "pydantic-settings", specifier = ">=2.12.0" },
+    { name = "redis", specifier = ">=5.3.1" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.44" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.38.0" },
 ]
 
 [[package]]

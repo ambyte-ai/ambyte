@@ -7,7 +7,11 @@ dependencies = [
     "ambyte-schemas",
     "cryptography>=46.0.3",  # For signing logs
     "pydantic>=2.12.4",
-    "sqlalchemy[asyncio]>=2.0.44", 
+    "sqlalchemy[asyncio]>=2.0.44",
+    "pydantic-settings>=2.12.0",
+    "redis>=5.3.1",
+    "fastapi>=0.117.1",
+    "uvicorn[standard]>=0.38.0",
 ]
 
 [tool.uv]

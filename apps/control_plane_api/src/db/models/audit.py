@@ -40,6 +40,10 @@ class AuditLog(Base, UUIDMixin, ProjectScopedMixin):
 	# CONTEXT: Snapshot of the request context (region, purpose) for reproducibility
 	request_context: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=True)
 
+	# CRYPTO: SHA-256 Hash of the log entry for tamper-evidence
+	# We use a server_default for migration safety, but the app should always provide this.
+	entry_hash: Mapped[str] = mapped_column(String(64), nullable=False, server_default='')
+
 	# Composite Index for common dashboard filtering:
 	# "Show me all denials for this project in the last hour"
 	__table_args__ = (Index('ix_audit_project_time_decision', 'project_id', 'timestamp', 'decision'),)
