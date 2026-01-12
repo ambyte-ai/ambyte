@@ -11,6 +11,7 @@ from src.db.session import get_db
 from src.schemas.policy import (
 	BatchObligationCreate,
 	ObligationFilter,
+	PolicySummary,
 )
 from src.services.policy_service import PolicyService
 
@@ -21,7 +22,7 @@ router = APIRouter()
 	'/',
 	summary='Push Obligations (Bulk Upsert)',
 	description="Create or update policies. Matches on the 'id' field (slug).",
-	response_model=list[ObligationSchema],
+	response_model=list[PolicySummary],
 	# Requires 'policy:write' scope on the API Key
 	dependencies=[Depends(VerifyScope('policy:write'))],
 )
@@ -36,9 +37,8 @@ async def push_obligations(
 	"""
 	upserted = await PolicyService.upsert_batch(db=db, project_id=project.id, obligations=payload.obligations)
 
-	# Map ORM objects back to Pydantic Schema
-	# ORM 'definition' column holds the exact structure required.
-	return [ObligationSchema(**obj.definition) for obj in upserted]
+	# Service returns PolicySummary objects, which match the response model
+	return upserted
 
 
 @router.get(

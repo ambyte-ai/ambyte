@@ -59,8 +59,8 @@ def compute_entry_hash(data: dict[str, Any]) -> str:
 			ensure_ascii=False,
 		).encode('utf-8')
 	except (TypeError, ValueError) as e:
-		# Fallback for debugging, though in prod this should raise or alert
-		# because an unhashable log is a security risk. TODO
+		# Serialization failure is a critical security/integrity risk.
+		# We must raise to prevent processing invalid data.
 		raise ValueError(f'Failed to serialize log entry for hashing: {e}') from e
 
 	# 3. Hash

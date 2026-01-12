@@ -64,10 +64,6 @@ class StreamConsumer:
 		"""
 		for stream in streams:
 			try:
-				# '$' means start consuming only new messages from now on.
-				# '0' would mean reprocess everything from the beginning of time.
-				# In a real event sourcing system, '0' might be preferred on fresh deploy,
-				# but '$' is safer for typical queue behavior. TODO
 				await self.redis.xgroup_create(stream, self.group_name, id='0', mkstream=True)
 			except Exception as e:
 				# "BUSYGROUP Consumer Group name already exists" is expected
