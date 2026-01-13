@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sys
 from contextlib import asynccontextmanager
 
@@ -11,6 +12,11 @@ from starlette.responses import RedirectResponse
 
 if sys.platform == 'win32':
 	asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+logging.basicConfig(
+	level=settings.LOG_LEVEL,
+	format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
 
 
 @asynccontextmanager

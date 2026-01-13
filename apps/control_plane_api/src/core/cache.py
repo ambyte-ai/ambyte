@@ -28,7 +28,20 @@ class CacheService:
 		"""
 		if not self._redis:
 			logger.info(f'Connecting to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}')
-			self._redis = from_url(settings.REDIS_URL, encoding='utf-8', decode_responses=True)
+			self._redis = from_url(
+				settings.REDIS_URL,
+				encoding='utf-8',
+				decode_responses=True,
+				socket_connect_timeout=5.0,
+				socket_timeout=5.0,
+			)
+
+			try:
+				await self._redis.ping()
+				logger.info('✅ Redis connection established and verified.')
+			except Exception as e:
+				logger.critical(f'❌ Redis connection FAILED: {e}')
+				raise e
 
 	async def close(self):
 		"""Close connection pool."""

@@ -39,7 +39,7 @@ class LineageGraph:
 		# 'get_max_risk_upstream(urn)' method to do this entirely in SQL.
 		for node_urn in nodes_to_check:
 			meta = await self.provider.get_node_metadata(node_urn)
-			risk = meta.get('risk', RiskSeverity.UNSPECIFIED)
+			risk = RiskSeverity(meta.get('risk', RiskSeverity.UNSPECIFIED))
 
 			# Assuming enum values are ordered integers (0=Unspecified, 4=Unacceptable)
 			if risk > max_risk:
@@ -62,7 +62,7 @@ class LineageGraph:
 
 		for node_urn in nodes_to_check:
 			meta = await self.provider.get_node_metadata(node_urn)
-			sens = meta.get('sensitivity', SensitivityLevel.UNSPECIFIED)
+			sens = SensitivityLevel(meta.get('sensitivity', SensitivityLevel.UNSPECIFIED))
 
 			if sens > max_sens:
 				max_sens = sens

@@ -42,8 +42,10 @@ RUN uv sync --frozen --no-dev --package ambyte-audit
 # ------------------------------------------------------------------------------
 WORKDIR /app/apps/audit-log
 
+RUN cp -r ../control_plane_api/src/db src/db
+
 # Expose health check port
 EXPOSE 8002
 
 # Run the worker process
-CMD ["uv", "run", "python", "src/main.py"]
+CMD ["uv", "run", "python", "-m", "src.main"]

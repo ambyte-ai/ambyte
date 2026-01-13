@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 	PROJECT_NAME: str = 'Ambyte Control Plane'
 	VERSION: str = '0.1.0'
 	API_V1_STR: str = '/v1'
+	LOG_LEVEL: str = 'INFO'
 
 	# ENVIRONMENT: local, staging, production
 	ENVIRONMENT: Literal['local', 'staging', 'production'] = 'local'
