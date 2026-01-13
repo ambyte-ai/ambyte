@@ -4,9 +4,10 @@ Decouples ingestion latency from database/signing operations.
 """
 
 import logging
-from typing import Any
+from typing import Any, Sequence, Union
 from uuid import UUID
 
+from ambyte_schemas.models.audit import AuditLogEntry
 from src.core.cache import cache
 from src.schemas.audit import AuditLogCreate
 
@@ -15,6 +16,8 @@ logger = logging.getLogger(__name__)
 # Maximum stream length before automatic trimming (approximate)
 # Prevents unbounded memory growth while maintaining ~24h of logs at high volume
 DEFAULT_MAXLEN = 100_000
+
+AuditPayload = Union[AuditLogCreate, AuditLogEntry]
 
 
 class AuditBuffer:
@@ -37,7 +40,7 @@ class AuditBuffer:
 		return f'audit:logs:{project_id}'
 
 	@staticmethod
-	def _serialize_entry(entry: AuditLogCreate) -> dict[str, Any]:
+	def _serialize_entry(entry: AuditPayload) -> dict[str, Any]:
 		"""
 		Serialize an AuditLogCreate to a flat dict for Redis Stream storage.
 		Redis Streams require string values, so we JSON-encode the full entry.
@@ -47,7 +50,7 @@ class AuditBuffer:
 			'ts': entry.timestamp.isoformat(),
 		}
 
-	async def push(self, project_id: UUID, entry: AuditLogCreate) -> str | None:
+	async def push(self, project_id: UUID, entry: AuditPayload) -> str | None:
 		"""
 		Push a single audit entry to the Redis Stream.
 
@@ -70,7 +73,7 @@ class AuditBuffer:
 
 		return entry_id
 
-	async def push_batch(self, project_id: UUID, entries: list[AuditLogCreate]) -> int:
+	async def push_batch(self, project_id: UUID, entries: Sequence[AuditPayload]) -> int:
 		"""
 		Push multiple audit entries to the Redis Stream using pipelining.
 		Significantly faster than individual push() calls for bulk ingestion.
