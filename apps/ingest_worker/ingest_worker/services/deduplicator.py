@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+from datetime import timedelta
 
 from ambyte_schemas.models.obligation import (
 	EnforcementLevel,
@@ -140,6 +141,39 @@ class Deduplicator:
 		# If single, just return it.
 		return ' | '.join(unique_entries), primary_section
 
+	def _resolve_target_tags(self, verbose_subject: str) -> dict[str, str]:
+		"""
+		Maps verbose legal subjects to canonical engineering tags.
+		"""
+		s = verbose_subject.lower()
+
+		# 1. PII / Personal Data
+		if any(x in s for x in ['personal data', 'pii', 'personally identifiable']):
+			# Most data engineers tag this as 'category: pii' or 'sensitivity: high'
+			return {'category': 'pii'}
+
+		# 2. Financial / Payment
+		if any(x in s for x in ['financial', 'payment', 'cardholder', 'pci']):
+			return {'category': 'financial', 'sensitivity': 'restricted'}
+
+		# 3. Health / PHI
+		if any(x in s for x in ['health', 'medical', 'phi', 'patient']):
+			return {'category': 'health', 'sensitivity': 'restricted'}
+
+		# 4. Usage / Telemetry
+		if any(x in s for x in ['usage', 'telemetry', 'logs', 'analytics']):
+			return {'category': 'telemetry'}
+
+		# 5. Confidential Information
+		if 'confidential' in s:
+			return {'sensitivity': 'confidential'}
+
+		# 6. Fallback: Clean Snake Case (Truncated)
+		# "Personal Data originating from..." -> "personal_data_originating"
+		clean = s.replace('(', '').replace(')', '').replace(',', '')
+		slug = '_'.join(clean.split()[:3])  # Take first 3 words only
+		return {'category': slug}
+
 	def _convert_to_obligation(
 		self,
 		slug: str,
@@ -164,10 +198,37 @@ class Deduplicator:
 			source_id = filename
 			doc_type = 'CONTRACT_UPLOAD'
 
-		# 2. Target Resolution
-		normalized_subject = master.subject.lower().replace(' ', '_')
-		target = ResourceSelector(match_tags={'data_category': normalized_subject})
+		target_tags = self._resolve_target_tags(master.subject)
 
+		if 'eea' in master.subject.lower() or 'europe' in master.subject.lower():
+			target_tags['origin'] = 'eea'
+
+		target = ResourceSelector(match_tags=target_tags)
+
+		# ----------------------------------------------------------------------
+		# SAFETY INTERCEPTOR: Prevent Immediate Data Loss (0s Retention)
+		# ----------------------------------------------------------------------
+		enforcement_level = EnforcementLevel.BLOCKING  # Default
+
+		# Check for the "Poison Pill" scenario
+		if master.retention_rule:
+			# Check if duration is effectively zero
+			is_zero_duration = master.retention_rule.duration.total_seconds() <= 0
+
+			if is_zero_duration:
+				# 1. Force a Safe Default Duration (e.g., 365 days) to prevent instant deletion logic
+				# even if the trigger is EVENT_DATE, because the SDK might fallback to creation time.
+				master.retention_rule.duration = timedelta(days=365)
+
+				# 2. Downgrade to AUDIT_ONLY
+				# We cannot block access based on a heuristic guess.
+				enforcement_level = EnforcementLevel.AUDIT_ONLY
+
+				# 3. Append explanation to rationale for transparency
+				rationale += (
+					' [SYSTEM: Duration was 0s (Immediate Deletion). '
+					'Auto-corrected to 365d and downgraded to AUDIT_ONLY for safety.]'
+				)
 		# 3. Construct Obligation
 		return Obligation(
 			id=slug,
@@ -180,7 +241,7 @@ class Deduplicator:
 				section_reference=section_ref or 'Extracted Section',
 				document_uri=f's3://{settings.S3_BUCKET_NAME}/{s3_key}' if s3_key else f's3://uploads/{filename}',
 			),
-			enforcement_level=EnforcementLevel.BLOCKING,  # Default to strict
+			enforcement_level=enforcement_level,
 			target=target,
 			# Polymorphic Assignment
 			retention=master.retention_rule,

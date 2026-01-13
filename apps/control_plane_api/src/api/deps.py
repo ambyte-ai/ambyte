@@ -34,10 +34,10 @@ async def get_current_api_key(
 	raw_key = token.credentials
 
 	# 1. Format Check (Fail fast)
-	if not (raw_key.startswith('sk_live_') or raw_key.startswith('sk_test_')):
+	if not (raw_key.startswith('sk_live_') or raw_key.startswith('sk_test_') or raw_key.startswith('sk_ingest_')):
 		raise HTTPException(
 			status_code=status.HTTP_403_FORBIDDEN,
-			detail="Invalid Key Format. Must start with 'sk_live_' or 'sk_test_'.",
+			detail="Invalid Key Format. Must start with 'sk_live_', 'sk_test_' or 'sk_ingest_'.",
 		)
 
 	# 2. Hash & Lookup

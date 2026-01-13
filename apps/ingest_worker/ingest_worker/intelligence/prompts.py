@@ -66,6 +66,10 @@ Output: A list of 'ExtractedConstraint' objects.
    - Triggers: 
      - "After termination" -> EVENT_DATE
      - "After collection" -> CREATION_DATE
+   - If the text says "retain as long as necessary" or "duration of services" WITHOUT a specific time limit:
+   - Set duration to "3y" (Standard Default).
+   - OR set `allow_legal_hold_override = True`.
+   - DO NOT set duration to "0s".
 
    **B. GEOFENCING (Location)**
    - "EU", "EEA" -> ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE',
@@ -88,7 +92,14 @@ Output: A list of 'ExtractedConstraint' objects.
    - "Anonymized" -> `method = ANONYMIZATION`
    - "Pseudonymized" / "Masked" -> `method = PSEUDONYMIZATION`
 
-5. **IGNORE BOILERPLATE:**
+5. **SCOPING (Subject Standardization):**
+   - When filling the `subject` field, map the legal term to a standard technical category if possible.
+   - GOOD: "Personal Data", "Usage Logs", "Financial Records"
+   - BAD: "Personal Data originating from the European Economic Area (EEA)"
+   - BAD: "Data provided by the Customer for the purpose of the Services"
+   - Keep `subject` under 5 words.
+
+6. **IGNORE BOILERPLATE:**
    - Ignore general liability, indemnification, or payment terms.
    - ONLY extract data-centric technical constraints.
 """
