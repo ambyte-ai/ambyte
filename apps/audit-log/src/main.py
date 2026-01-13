@@ -24,6 +24,8 @@ redis_client = from_url(settings.REDIS_URL, encoding='utf-8', decode_responses=F
 consumer = StreamConsumer(redis_client)
 repository = AuditRepository()
 
+pending_acks: dict[str, list[str]] = {}
+
 
 # ==============================================================================
 # Worker Logic
@@ -32,9 +34,6 @@ async def process_message_batch():
 	"""
 	The core loop: Read -> Hash -> Buffer -> Flush -> Ack
 	"""
-	# Track message IDs to ACK after a successful DB flush
-	pending_acks: dict[str, list[str]] = {}  # {stream_key: [msg_ids]}
-
 	async for stream_key, msg_id, raw_payload in consumer.consume():
 		try:
 			# 1. Extract Project ID from stream key (audit:logs:UUID)
@@ -70,7 +69,7 @@ async def process_message_batch():
 
 			# 5. Flush if Buffer Full
 			if repository.buffer_size >= settings.BATCH_SIZE:
-				await _flush_and_ack(pending_acks)
+				await _flush_and_ack()
 
 		except Exception as e:
 			logger.error(f'Failed to process message {msg_id}: {e}', exc_info=True)
@@ -80,7 +79,7 @@ async def process_message_batch():
 	# End of loop (shouldn't happen unless stopped)
 
 
-async def _flush_and_ack(pending_acks: dict[str, list[str]]):
+async def _flush_and_ack():
 	"""Helper to commit to DB and then ACK in Redis."""
 	if repository.buffer_size == 0:
 		return
@@ -90,12 +89,14 @@ async def _flush_and_ack(pending_acks: dict[str, list[str]]):
 		await repository.flush()
 
 		# 2. Redis ACK
-		for stream, ids in pending_acks.items():
-			if ids:
-				await consumer.ack(stream, ids)
+		acks_to_send = {k: list(v) for k, v in pending_acks.items() if v}
 
 		# Reset
 		pending_acks.clear()
+
+		for stream, ids in acks_to_send.items():
+			if ids:
+				await consumer.ack(stream, ids)
 
 	except Exception as e:
 		logger.critical(f'Flush failed! Data remains in Redis (will retry): {e}')
@@ -108,13 +109,12 @@ async def periodic_flush_task():
 	Background timer to flush buffer if it hasn't filled up.
 	This ensures low-volume logs don't get stuck in memory.
 	"""
+	# TODO: A more complex implementation would use a Queue between consumer and writer.
 	while True:
 		await asyncio.sleep(settings.BATCH_FLUSH_INTERVAL)
-		# Note: Ideally we share 'pending_acks' state. For simplicity in this
-		# mvp loop, we rely on the main loop to drive flushes. TODO
-		# A more complex implementation would use a Queue between consumer and writer.
-		# For now, we'll let the buffer fill or rely on restart-flush.
-		pass
+		if repository.buffer_size > 0:
+			logger.debug(f'Time-based flush triggered for {repository.buffer_size} items.')
+			await _flush_and_ack()
 
 
 # ==============================================================================
@@ -126,15 +126,31 @@ async def lifespan(app: FastAPI):
 	logger.info('Audit Worker starting up...')
 	await repository.connect()
 
-	# Run worker loop as a background task
-	loop_task = asyncio.create_task(process_message_batch())
+	# Run worker loops as background tasks
+	consumer_task = asyncio.create_task(process_message_batch())
+	flush_task = asyncio.create_task(periodic_flush_task())
 
 	yield
 
 	# Shutdown
 	logger.info('Audit Worker shutting down...')
 	consumer.stop()
-	await loop_task
+
+	# Wait briefly for tasks to finish
+	await asyncio.sleep(0.5)
+	consumer_task.cancel()
+	flush_task.cancel()
+
+	try:
+		await consumer_task
+	except asyncio.CancelledError:
+		pass
+
+	try:
+		await flush_task
+	except asyncio.CancelledError:
+		pass
+
 	await redis_client.aclose()
 	await repository.close()
 

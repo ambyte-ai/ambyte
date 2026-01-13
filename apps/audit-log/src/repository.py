@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from ambyte_schemas.models.audit import AuditLogEntry
+from ambyte_schemas.models.audit import AuditLogEntry, Decision
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from src.config import settings
@@ -45,6 +45,7 @@ class AuditRepository:
 		# Convert Pydantic model to flat DB dictionary
 		# Note: We must serialize nested JSONB fields (reason_trace, request_context)
 		# using model_dump() to ensure they are compatible with JSONB columns.
+		decision_name = Decision(log.decision).name
 		row = {
 			'id': log.id,
 			'project_id': UUID(project_id),
@@ -52,7 +53,7 @@ class AuditRepository:
 			'actor_id': log.actor.id,
 			'resource_urn': log.resource_urn,
 			'action': log.action,
-			'decision': log.decision.name,  # Enum name (ALLOW/DENY)
+			'decision': decision_name,  # Enum name (ALLOW/DENY)
 			'reason_trace': (log.evaluation_trace.model_dump() if log.evaluation_trace else None),
 			'request_context': log.request_context,
 			'entry_hash': log.entry_hash,
