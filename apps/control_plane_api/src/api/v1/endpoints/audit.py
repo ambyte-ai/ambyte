@@ -1,10 +1,14 @@
 import logging
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from ambyte_schemas.models.audit import AuditProof
+from fastapi import APIRouter, Depends, Path, status
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import VerifyScope, get_current_project
 from src.core.scopes import Scope
 from src.db.models.tenancy import Project
+from src.db.session import get_db
 from src.schemas.audit import BatchAuditLogCreate
 from src.services.audit_service import AuditService
 
@@ -41,3 +45,26 @@ async def ingest_audit_logs(
 		'buffered': True,
 		'message': f'{count} audit logs queued for processing.',
 	}
+
+
+@router.get(
+	'/proof/{log_id}',
+	response_model=AuditProof,
+	summary='Get Cryptographic Proof',
+	description='Returns the Log Entry, the Signed Block Header, and the Merkle Path required to verify integrity.',
+	# READ access required
+	dependencies=[
+		Depends(VerifyScope(Scope.AUDIT_WRITE))
+	],  # Usually WRITE implies READ for audit in simple scopes, or add AUDIT_READ
+)
+async def get_audit_proof(
+	log_id: Annotated[UUID, Path(title='The UUID of the log entry to verify')],
+	project: Annotated[Project, Depends(get_current_project)],
+	db: Annotated[AsyncSession, Depends(get_db)],
+):
+	"""
+	Retrieves the verification bundle for a specific audit log.
+	Allows clients to mathematically prove that the log exists in the immutable chain
+	and has not been altered since sealing.
+	"""
+	return await AuditService.get_proof(db, project.id, log_id)

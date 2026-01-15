@@ -2,10 +2,14 @@ import logging
 import uuid
 from uuid import UUID
 
-from ambyte_schemas.models.audit import AuditLogEntry, Decision, PolicyEvaluationTrace
+from ambyte_schemas.models.audit import AuditBlockHeader, AuditLogEntry, AuditProof, Decision, PolicyEvaluationTrace
 from ambyte_schemas.models.common import Actor, ActorType
+from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from src.core.hashing import compute_entry_hash
+from src.core.merkle import MerkleTree
 from src.db.models.audit import AuditLog
 from src.schemas.audit import AuditLogCreate
 from src.services.audit_buffer import audit_buffer
@@ -162,3 +166,87 @@ class AuditService:
 		count = len(db_objects)
 		logger.info(f'Ingested {count} audit logs for project {project_id}')
 		return count
+
+	@staticmethod
+	async def get_proof(db: AsyncSession, project_id: UUID, log_id: UUID) -> AuditProof:
+		"""
+		Generates a Cryptographic Inclusion Proof for a specific log entry.
+
+		Steps:
+		1. Fetch the Log and its associated Block.
+		2. If not sealed (no block), raise 404/409.
+		3. Fetch ALL other log hashes in that block.
+		4. Reconstruct the Merkle Tree in memory.
+		5. Extract the sibling path for the target log.
+		6. Return the Proof bundle.
+		"""
+
+		# 1. Fetch Log + Block
+		stmt = (
+			select(AuditLog)
+			.where(AuditLog.id == log_id, AuditLog.project_id == project_id)
+			.options(selectinload(AuditLog.block))
+		)
+		result = await db.execute(stmt)
+		log_orm = result.scalars().first()
+
+		if not log_orm:
+			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Audit log entry not found.')
+
+		if not log_orm.block:
+			raise HTTPException(
+				status_code=status.HTTP_409_CONFLICT,
+				detail='Log entry is currently buffered and has not yet been sealed into a block. Try again later.',
+			)
+
+		# 2. Fetch Siblings
+		# We need every hash in this block to reconstruct the tree and find the path.
+		# Optimization: Only select entry_hash, not full rows.
+		siblings_stmt = select(AuditLog.entry_hash).where(AuditLog.block_id == log_orm.block_id)
+		siblings_res = await db.execute(siblings_stmt)
+		all_leaf_hashes = siblings_res.scalars().all()
+
+		# 3. Build Tree & Get Path
+		tree = MerkleTree(leaves=list(all_leaf_hashes))
+
+		# Verification sanity check
+		if tree.root != log_orm.block.merkle_root:
+			logger.critical(f'INTEGRITY ERROR: Computed Root {tree.root} != Stored Root {log_orm.block.merkle_root}')
+			raise HTTPException(
+				status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+				detail='System Integrity Error: Recomputed Merkle Root does not match stored Block Header.',
+			)
+
+		proof_path = tree.get_proof(log_orm.entry_hash)
+
+		# 4. Map ORM -> Pydantic Response
+
+		# Map Log Entry
+		# (Reusing logic from _map_to_canonical conceptually, but mapping from DB model)
+		entry_model = AuditLogEntry(
+			id=str(log_orm.id),
+			timestamp=log_orm.timestamp,
+			actor=Actor(id=log_orm.actor_id, type=ActorType.UNSPECIFIED),  # Type often lost in flattening
+			resource_urn=log_orm.resource_urn,
+			action=log_orm.action,
+			decision=Decision[log_orm.decision],
+			evaluation_trace=PolicyEvaluationTrace.model_validate(log_orm.reason_trace)
+			if log_orm.reason_trace
+			else None,
+			request_context=log_orm.request_context or {},
+			entry_hash=log_orm.entry_hash,
+		)
+
+		# Map Block Header
+		block_model = AuditBlockHeader(
+			id=str(log_orm.block.id),
+			sequence_index=log_orm.block.sequence_index,
+			prev_block_hash=log_orm.block.prev_block_hash,
+			merkle_root=log_orm.block.merkle_root,
+			timestamp_start=log_orm.block.timestamp_start,
+			timestamp_end=log_orm.block.timestamp_end,
+			log_count=log_orm.block.log_count,
+			signature=log_orm.block.signature,
+		)
+
+		return AuditProof(entry=entry_model, block_header=block_model, merkle_siblings=proof_path)

@@ -123,7 +123,7 @@ class AuditBlockHeader(AmbyteBaseModel):
 	timestamp_start: datetime
 	timestamp_end: datetime
 	log_count: int
-	signature: bytes
+	signature: str
 
 	def to_proto(self) -> audit_pb2.AuditBlockHeader:
 		start = Timestamp()
@@ -139,7 +139,7 @@ class AuditBlockHeader(AmbyteBaseModel):
 			timestamp_start=start,
 			timestamp_end=end,
 			log_count=self.log_count,
-			signature=self.signature,
+			signature=bytes.fromhex(self.signature),
 		)
 
 	@classmethod
@@ -152,7 +152,7 @@ class AuditBlockHeader(AmbyteBaseModel):
 			timestamp_start=proto.timestamp_start.ToDatetime().replace(tzinfo=timezone.utc),
 			timestamp_end=proto.timestamp_end.ToDatetime().replace(tzinfo=timezone.utc),
 			log_count=proto.log_count,
-			signature=proto.signature,
+			signature=proto.signature.hex(),
 		)
 
 
