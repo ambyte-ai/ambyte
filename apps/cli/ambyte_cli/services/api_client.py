@@ -73,11 +73,11 @@ class CloudApiClient:
 		Sends a batch of obligations to the Control Plane for upsert.
 
 		Args:
-		    obligations_data: A list of dicts serialized from Obligation schemas.
-		    prune: If True, deactivates obligations not present in this batch.
-		    dry_run: If True, simulates the operation without persisting changes.
+			obligations_data: A list of dicts serialized from Obligation schemas.
+			prune: If True, deactivates obligations not present in this batch.
+			dry_run: If True, simulates the operation without persisting changes.
 		Returns:
-		    The list of successfully processed obligations from the server.
+			The list of successfully processed obligations from the server.
 		"""  # noqa: E101
 		payload = {'obligations': obligations_data, 'prune': prune, 'dry_run': dry_run}
 
@@ -127,6 +127,21 @@ class CloudApiClient:
 			raise
 		except httpx.RequestError:
 			console.print('[error]Network Error:[/error] Failed to fetch obligations.')
+			raise
+
+	def get_audit_proof(self, log_id: str) -> dict:
+		"""
+		Fetches the cryptographic proof bundle for a specific log ID.
+		"""
+		try:
+			response = self._client.get(f'/v1/audit/proof/{log_id}')
+			response.raise_for_status()
+			return response.json()
+		except httpx.HTTPStatusError as e:
+			self._handle_http_error(e)
+			raise
+		except httpx.RequestError:
+			console.print('[error]Network Error:[/error] Failed to fetch audit proof.')
 			raise
 
 	def close(self):

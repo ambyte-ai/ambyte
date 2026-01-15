@@ -31,7 +31,6 @@ class AuditSigner:
 		key_data = private_key_hex
 
 		# 2. Try Settings (Env Var)
-		# Note: You need to add AMBYTE_SYSTEM_PRIVATE_KEY to src/config.py settings model
 		if not key_data and hasattr(settings, 'SYSTEM_PRIVATE_KEY'):
 			key_data = settings.SYSTEM_PRIVATE_KEY
 

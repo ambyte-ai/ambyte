@@ -9,7 +9,7 @@ import typer
 from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback
 
-from ambyte_cli.commands import check, cloud, core, project
+from ambyte_cli.commands import audit, check, cloud, core, project
 from ambyte_cli.ui.console import console
 
 # 1. Configure Global Rich Behavior
@@ -57,6 +57,11 @@ app.add_typer(cloud_app, name='cloud')
 app.command(name='login', help='Authenticate with the Ambyte Control Plane.')(cloud.login)
 app.command(name='push', help='Push local policies to the Control Plane.')(cloud.push)
 app.command(name='pull', help='Pull the latest obligations from the Control Plane.')(cloud.pull)
+
+# --- Audit & Verification ---
+audit_app = typer.Typer(help='Cryptographic verification tools.')
+app.add_typer(audit_app, name='audit')
+audit_app.command(name='verify')(audit.verify_log)
 
 
 # 4. Global Callbacks & Configuration
