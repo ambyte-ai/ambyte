@@ -41,6 +41,9 @@ services:
       - AMBYTE_AUDIT_REDIS_URL=redis://redis:6379/0
       - AMBYTE_AUDIT_DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/ambyte
       - AMBYTE_AUDIT_LOG_LEVEL=INFO
+      # Testing Config: Aggressive sealing for smoke tests. Only used in dev.
+      - AMBYTE_AUDIT_SEAL_MIN_LOGS=1
+      - AMBYTE_AUDIT_SEAL_MAX_TIME_WINDOW=5
     depends_on:
       redis:
         condition: service_healthy

@@ -28,6 +28,10 @@ class Settings(BaseSettings):
 	# Redis (Stream Source)
 	REDIS_URL: str = 'redis://redis:6379/0'
 
+	# 32-byte Hex-encoded Ed25519 Private Key.
+	# Used to digitally sign Audit Blocks.
+	SYSTEM_PRIVATE_KEY: str | None = None
+
 	# Worker Tuning
 	# How many log entries to pull from Redis in a single XREADGROUP call
 	BATCH_SIZE: int = 1000
@@ -37,6 +41,10 @@ class Settings(BaseSettings):
 
 	# How often to scan for new project streams (seconds)
 	STREAM_DISCOVERY_INTERVAL: int = 10
+
+	# Sealing Thresholds
+	SEAL_MIN_LOGS: int = 100
+	SEAL_MAX_TIME_WINDOW: int = 300  # 5 minutes
 
 	# Consumer Group Config
 	CONSUMER_GROUP_NAME: str = 'audit_worker_group'

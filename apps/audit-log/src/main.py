@@ -9,6 +9,7 @@ from src.config import settings
 from src.consumer import StreamConsumer
 from src.hashing import compute_entry_hash
 from src.repository import AuditRepository
+from src.sealer import SealerService
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +24,7 @@ logger = logging.getLogger(settings.SERVICE_NAME)
 redis_client = from_url(settings.REDIS_URL, encoding='utf-8', decode_responses=False)
 consumer = StreamConsumer(redis_client)
 repository = AuditRepository()
+sealer = SealerService(repository, redis_client)
 
 pending_acks: dict[str, list[str]] = {}
 
@@ -130,16 +132,21 @@ async def lifespan(app: FastAPI):
 	consumer_task = asyncio.create_task(process_message_batch())
 	flush_task = asyncio.create_task(periodic_flush_task())
 
+	# Start the Sealer (Runs periodically)
+	sealer_task = asyncio.create_task(sealer.start())
+
 	yield
 
 	# Shutdown
 	logger.info('Audit Worker shutting down...')
 	consumer.stop()
+	sealer.stop()
 
 	# Wait briefly for tasks to finish
 	await asyncio.sleep(0.5)
 	consumer_task.cancel()
 	flush_task.cancel()
+	sealer_task.cancel()
 
 	try:
 		await consumer_task
@@ -148,6 +155,11 @@ async def lifespan(app: FastAPI):
 
 	try:
 		await flush_task
+	except asyncio.CancelledError:
+		pass
+
+	try:
+		await sealer_task
 	except asyncio.CancelledError:
 		pass
 
