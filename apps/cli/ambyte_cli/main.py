@@ -62,6 +62,7 @@ app.command(name='pull', help='Pull the latest obligations from the Control Plan
 audit_app = typer.Typer(help='Cryptographic verification tools.')
 app.add_typer(audit_app, name='audit')
 audit_app.command(name='verify')(audit.verify_log)
+audit_app.command(name='list')(audit.list_logs)
 
 
 # 4. Global Callbacks & Configuration

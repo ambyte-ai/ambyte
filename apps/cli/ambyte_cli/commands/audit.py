@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import typer
 from ambyte_cli.config import load_config
 from ambyte_cli.services.api_client import CloudApiClient
@@ -130,3 +132,56 @@ def verify_log(
 
 def _print_fail(title: str, reason: str):
 	console.print(Panel(f'[bold]{title}[/bold]\n\n{reason}', border_style='red', title='❌ TAMPER DETECTED'))
+
+
+@app.command(name='list')
+def list_logs(
+	limit: int = typer.Option(20, '--limit', '-n', help='Number of logs to show.'),
+	actor: str = typer.Option(None, '--actor', help='Filter by Actor ID.'),
+	resource: str = typer.Option(None, '--resource', help='Filter by Resource URN.'),
+):
+	"""
+	List recent audit logs to find IDs for verification.
+	"""
+	try:
+		config = load_config()
+		client = CloudApiClient(config)
+
+		with console.status('[info]Fetching audit logs...[/info]'):
+			logs = client.list_audit_logs(limit=limit, actor=actor, resource=resource)
+
+		if not logs:
+			console.print('[yellow]No audit logs found matching criteria.[/yellow]')
+			return
+
+		table = Table(title=f'Recent Audit Logs ({len(logs)})', show_header=True, header_style='bold cyan')
+		table.add_column('Log ID (UUID)', style='dim')
+		table.add_column('Time', width=20)
+		table.add_column('Decision')
+		table.add_column('Actor')
+		table.add_column('Action')
+		table.add_column('Status', justify='center')
+
+		for log in logs:
+			# Parse time
+			dt = datetime.fromisoformat(log['timestamp'])
+			time_str = dt.strftime('%Y-%m-%d %H:%M:%S')
+
+			# Colorize decision
+			decision_style = 'green' if log['decision'] == 'ALLOW' else 'red'
+			decision_txt = f'[{decision_style}]{log["decision"]}[/{decision_style}]'
+
+			# Check sealed status
+			is_sealed = log.get('block_id') is not None
+			status_icon = '🔒 Sealed' if is_sealed else '[yellow]⏳ Buffered[/yellow]'
+
+			table.add_row(log['id'], time_str, decision_txt, log['actor']['id'], log['action'], status_icon)
+
+		console.print(table)
+		console.print(
+			'\n[dim]Run [bold]ambyte audit verify <Log ID>[/bold] to cryptographically prove integrity.[/dim]'
+		)
+
+	except Exception as e:
+		console.print(f'[error]Failed to list logs:[/error] {e}')
+		raise typer.Exit(1) from e

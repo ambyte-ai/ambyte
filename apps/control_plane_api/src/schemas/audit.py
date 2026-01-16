@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PolicyContribution(BaseModel):
@@ -57,3 +58,16 @@ class BatchAuditLogCreate(BaseModel):
 	"""
 
 	logs: list[AuditLogCreate]
+
+
+class AuditLogRead(AuditLogCreate):
+	"""
+	Output schema for listing logs.
+	"""
+
+	id: UUID
+	project_id: UUID
+	entry_hash: str
+	block_id: UUID | None = None  # If present, log is sealed
+
+	model_config = ConfigDict(from_attributes=True)

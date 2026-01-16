@@ -250,3 +250,27 @@ class AuditService:
 		)
 
 		return AuditProof(entry=entry_model, block_header=block_model, merkle_siblings=proof_path)
+
+	@staticmethod
+	async def list_logs(
+		db: AsyncSession,
+		project_id: UUID,
+		limit: int = 50,
+		actor_id: str | None = None,
+		resource_urn: str | None = None,
+	) -> list[AuditLog]:
+		"""
+		Fetch recent audit logs for the project.
+		"""
+		stmt = (
+			select(AuditLog).where(AuditLog.project_id == project_id).order_by(AuditLog.timestamp.desc()).limit(limit)
+		)
+
+		if actor_id:
+			stmt = stmt.where(AuditLog.actor_id == actor_id)
+
+		if resource_urn:
+			stmt = stmt.where(AuditLog.resource_urn == resource_urn)
+
+		result = await db.execute(stmt)
+		return list(result.scalars().all())

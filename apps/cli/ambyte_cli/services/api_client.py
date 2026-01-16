@@ -144,6 +144,27 @@ class CloudApiClient:
 			console.print('[error]Network Error:[/error] Failed to fetch audit proof.')
 			raise
 
+	def list_audit_logs(self, limit: int = 20, actor: str | None = None, resource: str | None = None) -> list[dict]:
+		"""
+		Fetches a list of audit logs from the control plane.
+		"""
+		params: dict[str, int | str] = {'limit': limit}
+		if actor:
+			params['actor_id'] = actor
+		if resource:
+			params['resource'] = resource
+
+		try:
+			response = self._client.get('/v1/audit/', params=params)
+			response.raise_for_status()
+			return response.json()
+		except httpx.HTTPStatusError as e:
+			self._handle_http_error(e)
+			raise
+		except httpx.RequestError:
+			console.print('[error]Network Error:[/error] Failed to fetch audit logs.')
+			raise
+
 	def close(self):
 		"""Cleanly close the connection pool."""
 		self._client.close()

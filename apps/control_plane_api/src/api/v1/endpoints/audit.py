@@ -9,7 +9,7 @@ from src.api.deps import VerifyScope, get_current_project
 from src.core.scopes import Scope
 from src.db.models.tenancy import Project
 from src.db.session import get_db
-from src.schemas.audit import BatchAuditLogCreate
+from src.schemas.audit import AuditLogRead, BatchAuditLogCreate
 from src.services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
@@ -68,3 +68,20 @@ async def get_audit_proof(
 	and has not been altered since sealing.
 	"""
 	return await AuditService.get_proof(db, project.id, log_id)
+
+
+@router.get(
+	'/',
+	response_model=list[AuditLogRead],
+	summary='List Audit Logs',
+	description='Retrieve recent audit logs for the current project.',
+	dependencies=[Depends(VerifyScope(Scope.AUDIT_WRITE))],  # Or define a new AUDIT_READ scope TODO
+)
+async def list_audit_logs(
+	project: Annotated[Project, Depends(get_current_project)],
+	db: Annotated[AsyncSession, Depends(get_db)],
+	limit: int = 50,
+	actor_id: str | None = None,
+	resource: str | None = None,
+):
+	return await AuditService.list_logs(db, project.id, limit=limit, actor_id=actor_id, resource_urn=resource)
