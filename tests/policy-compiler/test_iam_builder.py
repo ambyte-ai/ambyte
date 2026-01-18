@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 
 from ambyte_compiler.generators.iam_builder import IamPolicyBuilder
 from ambyte_rules.models import (
@@ -8,6 +9,7 @@ from ambyte_rules.models import (
 	EffectiveRetention,
 	ResolvedPolicy,
 )
+from ambyte_schemas.models.obligation import RetentionTrigger
 
 # ==============================================================================
 # HELPERS
@@ -147,13 +149,12 @@ def test_iam_retention_hold():
 	Verify legal hold logic protects S3 Object Tags.
 	"""
 	builder = IamPolicyBuilder()
-	from datetime import timedelta
-
 	policy = ResolvedPolicy(
 		resource_urn='urn:aws:s3:bucket',
 		retention=EffectiveRetention(
 			duration=timedelta(days=1),
 			is_indefinite=True,  # Triggers lock
+			trigger=RetentionTrigger.CREATION_DATE,
 			reason=make_trace('HOLD'),
 		),
 	)

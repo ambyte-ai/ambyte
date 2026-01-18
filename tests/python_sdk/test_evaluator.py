@@ -1,5 +1,4 @@
 """
-tests/python_sdk/test_evaluator.py
 Tests the pure Python policy evaluation logic used by the SDK.
 """
 
@@ -16,7 +15,7 @@ from ambyte_rules.models import (
 	EffectiveRetention,
 	ResolvedPolicy,
 )
-from ambyte_schemas.models.obligation import PrivacyMethod
+from ambyte_schemas.models.obligation import PrivacyMethod, RetentionTrigger
 
 # ==============================================================================
 # FIXTURES & HELPERS
@@ -213,7 +212,9 @@ def test_ai_other_action_allowed(evaluator):
 
 def test_retention_indefinite_hold(evaluator):
 	"""Legal hold overrides expiration."""
-	ret = EffectiveRetention(duration=timedelta(days=1), is_indefinite=True, reason=make_trace())
+	ret = EffectiveRetention(
+		duration=timedelta(days=1), is_indefinite=True, trigger=RetentionTrigger.CREATION_DATE, reason=make_trace()
+	)
 
 	old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
 
@@ -225,7 +226,7 @@ def test_retention_indefinite_hold(evaluator):
 
 def test_retention_missing_date_fail_open(evaluator):
 	"""If we don't know the date, we warn and allow (Fail Open logic)."""
-	ret = EffectiveRetention(duration=timedelta(days=1), reason=make_trace())
+	ret = EffectiveRetention(duration=timedelta(days=1), trigger=RetentionTrigger.CREATION_DATE, reason=make_trace())
 
 	# Internal check
 	allowed, reason = evaluator._check_retention(ret, {})  # No created_at
@@ -235,7 +236,7 @@ def test_retention_missing_date_fail_open(evaluator):
 
 def test_retention_expired(evaluator):
 	"""Data older than duration is blocked."""
-	ret = EffectiveRetention(duration=timedelta(days=30), reason=make_trace())
+	ret = EffectiveRetention(duration=timedelta(days=30), trigger=RetentionTrigger.CREATION_DATE, reason=make_trace())
 	policy = make_policy(retention=ret)
 
 	# Created 31 days ago
@@ -248,7 +249,7 @@ def test_retention_expired(evaluator):
 
 def test_retention_valid(evaluator):
 	"""Data younger than duration is allowed."""
-	ret = EffectiveRetention(duration=timedelta(days=30), reason=make_trace())
+	ret = EffectiveRetention(duration=timedelta(days=30), trigger=RetentionTrigger.CREATION_DATE, reason=make_trace())
 
 	# Created 1 day ago
 	past = datetime.now(timezone.utc) - timedelta(days=1)
@@ -264,7 +265,7 @@ def test_retention_bad_date_format(evaluator):
 	Invalid date format strings (e.g. 'not-a-date') raise ValueError in fromisoformat.
 	This triggers the 'except Exception' block.
 	"""
-	ret = EffectiveRetention(duration=timedelta(days=1), reason=make_trace())
+	ret = EffectiveRetention(duration=timedelta(days=1), trigger=RetentionTrigger.CREATION_DATE, reason=make_trace())
 
 	# Internal check
 	allowed, reason = evaluator._check_retention(ret, {'created_at': 'not-a-date'})
@@ -274,7 +275,7 @@ def test_retention_bad_date_format(evaluator):
 
 def test_retention_naive_datetime_handling(evaluator):
 	"""Ensure naive datetimes are forced to UTC for comparison."""
-	ret = EffectiveRetention(duration=timedelta(hours=1), reason=make_trace())
+	ret = EffectiveRetention(duration=timedelta(hours=1), trigger=RetentionTrigger.CREATION_DATE, reason=make_trace())
 	policy = make_policy(retention=ret)
 
 	# Naive datetime 2 hours ago
@@ -291,7 +292,7 @@ def test_retention_invalid_type_fail_open(evaluator):
 	Ensure objects that are neither str nor datetime hit the explicit validation check
 	and fail open with a specific message.
 	"""
-	ret = EffectiveRetention(duration=timedelta(days=1), reason=make_trace())
+	ret = EffectiveRetention(duration=timedelta(days=1), trigger=RetentionTrigger.CREATION_DATE, reason=make_trace())
 
 	class BadDate:
 		pass
@@ -328,7 +329,7 @@ def test_evaluation_short_circuit(evaluator):
 	"""
 	# Create a policy that fails Geo AND Retention
 	geo = EffectiveGeofencing(blocked_regions={'US'}, reason=make_trace())
-	ret = EffectiveRetention(duration=timedelta(days=1), reason=make_trace())
+	ret = EffectiveRetention(duration=timedelta(days=1), trigger=RetentionTrigger.CREATION_DATE, reason=make_trace())
 
 	policy = make_policy(geofencing=geo, retention=ret)
 

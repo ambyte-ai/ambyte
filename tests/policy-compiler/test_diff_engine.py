@@ -3,6 +3,7 @@ from datetime import timedelta
 from ambyte_compiler.diff_engine.models import ChangeImpact, ChangeType
 from ambyte_compiler.diff_engine.service import SemanticDiffEngine
 from ambyte_rules.models import ConflictTrace, EffectiveAiRules, EffectiveGeofencing, EffectiveRetention, ResolvedPolicy
+from ambyte_schemas.models.obligation import RetentionTrigger
 
 
 def make_trace():
@@ -16,11 +17,21 @@ def test_retention_diff_restrictive_duration():
 	"""Test that reducing retention duration is Restrictive."""
 	old = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=365), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=365),
+			reason=make_trace(),
+			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
+		),
 	)
 	new = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=30), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=30),
+			reason=make_trace(),
+			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
+		),
 	)
 
 	engine = SemanticDiffEngine()
@@ -37,11 +48,21 @@ def test_retention_diff_permissive_duration():
 	"""Test that increasing retention duration is Permissive."""
 	old = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=30), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=30),
+			reason=make_trace(),
+			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
+		),
 	)
 	new = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=365), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=365),
+			reason=make_trace(),
+			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
+		),
 	)
 
 	engine = SemanticDiffEngine()
@@ -54,7 +75,12 @@ def test_retention_removed():
 	"""Test removing retention completely (defined -> None) is Permissive."""
 	old = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=30), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=30),
+			reason=make_trace(),
+			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
+		),
 	)
 	new = ResolvedPolicy(resource_urn='urn:test', retention=None)
 
@@ -71,7 +97,9 @@ def test_retention_added():
 	old = ResolvedPolicy(resource_urn='urn:test', retention=None)
 	new = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=1), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=1), reason=make_trace(), is_indefinite=False, trigger=RetentionTrigger.CREATION_DATE
+		),
 	)
 
 	engine = SemanticDiffEngine()
@@ -87,11 +115,18 @@ def test_retention_indefinite_flag():
 	# Case A: False -> True (Permissive)
 	old = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=30), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=30),
+			reason=make_trace(),
+			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
+		),
 	)
 	new = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=30), reason=make_trace(), is_indefinite=True),
+		retention=EffectiveRetention(
+			duration=timedelta(days=30), reason=make_trace(), is_indefinite=True, trigger=RetentionTrigger.CREATION_DATE
+		),
 	)
 
 	engine = SemanticDiffEngine()
@@ -286,7 +321,9 @@ def test_markdown_risk_decrease():
 	old = ResolvedPolicy(resource_urn='urn:test', retention=None)
 	new = ResolvedPolicy(
 		resource_urn='urn:test',
-		retention=EffectiveRetention(duration=timedelta(days=1), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=1), reason=make_trace(), is_indefinite=False, trigger=RetentionTrigger.CREATION_DATE
+		),
 	)
 
 	engine = SemanticDiffEngine()
@@ -303,14 +340,24 @@ def test_markdown_risk_neutral():
 	old = ResolvedPolicy(
 		resource_urn='urn:test',
 		# Has short retention (strict)
-		retention=EffectiveRetention(duration=timedelta(days=10), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=10),
+			reason=make_trace(),
+			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
+		),
 		# No geo
 		geofencing=None,
 	)
 	new = ResolvedPolicy(
 		resource_urn='urn:test',
 		# Increased retention (permissive) -> +1
-		retention=EffectiveRetention(duration=timedelta(days=100), reason=make_trace(), is_indefinite=False),
+		retention=EffectiveRetention(
+			duration=timedelta(days=100),
+			reason=make_trace(),
+			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
+		),
 		# Added geo (restrictive) -> -1
 		geofencing=EffectiveGeofencing(allowed_regions={'US'}, reason=make_trace(), is_global_ban=False),
 	)

@@ -8,6 +8,7 @@ from ambyte_rules.models import (
 	EffectiveRetention,
 	ResolvedPolicy,
 )
+from ambyte_schemas.models.obligation import RetentionTrigger
 
 # ==============================================================================
 # HELPERS
@@ -36,6 +37,7 @@ def test_build_full_bundle_serialization():
 		retention=EffectiveRetention(
 			duration=timedelta(days=1),  # 86400 seconds
 			is_indefinite=False,
+			trigger=RetentionTrigger.CREATION_DATE,
 			reason=make_trace('RET-01'),
 		),
 		# 2. Geo: Check Set -> List conversion and sorting
