@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Any
 
 from ambyte_schemas.models.common import AmbyteBaseModel
-from ambyte_schemas.models.obligation import PrivacyMethod
+from ambyte_schemas.models.obligation import PrivacyMethod, RetentionTrigger
 from pydantic import Field
 
 
@@ -15,6 +15,7 @@ class ConflictTrace(AmbyteBaseModel):
 class EffectiveRetention(AmbyteBaseModel):
 	duration: timedelta = Field(..., description='The calculated lifespan of the data.')
 	is_indefinite: bool = Field(False, description='If True, data cannot be deleted (e.g., Legal Hold).')
+	trigger: RetentionTrigger = Field(..., description='The event that starts the retention clock.')
 	reason: ConflictTrace
 
 

@@ -30,6 +30,7 @@ class RetentionSolver(BaseSolver[EffectiveRetention]):
 		# Start with the maximum possible time to ensure the first rule overwrites it.
 		min_duration = timedelta.max
 		winning_ob: Obligation | None = None
+		winning_rule: RetentionRule | None = None
 
 		# 3. Iterate and Solve
 		for ob in relevant_obs:
@@ -39,9 +40,10 @@ class RetentionSolver(BaseSolver[EffectiveRetention]):
 			if rule.duration < min_duration:
 				min_duration = rule.duration
 				winning_ob = ob
+				winning_rule = rule
 
 		# Safety check (should technically be unreachable due to relevant_obs check)
-		if winning_ob is None:
+		if winning_ob is None or winning_rule is None:
 			return None
 
 		# 4. Construct the Result
@@ -51,6 +53,7 @@ class RetentionSolver(BaseSolver[EffectiveRetention]):
 			# For now, we default to False unless specific logic dictates otherwise.
 			# The legal hold *capability* is noted, but doesn't automatically make retention indefinite
 			# unless a hold is actually active (which would be a runtime check, not a static rule check).
+			trigger=winning_rule.trigger,
 			is_indefinite=False,
 			reason=ConflictTrace(
 				winning_obligation_id=winning_ob.id,

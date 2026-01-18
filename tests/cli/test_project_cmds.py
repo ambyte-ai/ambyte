@@ -171,6 +171,12 @@ def test_validate_failure_schema_error(temp_cwd):
 
 	# if at least one is good, it exits 0.
 	assert result.exit_code == 0
-	assert 'Error loading bad.yaml' in result.stdout
+
+	# Verify that errors are reported.
+	# The output format is: "Error loading policy: File bad.yaml: ..."
+	assert 'Error loading policy' in result.stdout
+	assert 'bad.yaml' in result.stdout
 	assert 'Validation Failed' in result.stdout
+
+	# Ensure the valid one still passed
 	assert 'Validated 1 obligation' in result.stdout

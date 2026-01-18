@@ -11,7 +11,7 @@ from ambyte_rules.models import (
 	EffectiveRetention,
 	ResolvedPolicy,
 )
-from ambyte_schemas.models.obligation import PrivacyMethod
+from ambyte_schemas.models.obligation import PrivacyMethod, RetentionTrigger
 
 # ==============================================================================
 # HELPERS & FIXTURES
@@ -148,6 +148,7 @@ def test_retention_legal_hold(generator):
 	retention = EffectiveRetention(
 		duration=timedelta(days=1),
 		is_indefinite=True,  # This triggers the logic
+		trigger=RetentionTrigger.CREATION_DATE,
 		reason=make_trace(),
 	)
 	policy = make_policy(retention=retention)
