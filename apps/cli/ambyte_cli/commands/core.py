@@ -26,6 +26,7 @@ from ambyte_compiler.diff_engine.service import SemanticDiffEngine
 from ambyte_compiler.matcher import ResourceMatcher
 from ambyte_compiler.service import PolicyCompilerService
 from ambyte_rules.engine import ConflictResolutionEngine
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -71,7 +72,11 @@ def resolve(
 		obl_loader = ObligationLoader(config)
 
 		# 2. Load Definitions
-		with console.status('[bold green]Loading obligations...[/bold green]'):
+		if not json_out:
+			with console.status('[bold green]Loading obligations...[/bold green]'):
+				obligations = obl_loader.load_all()
+
+		else:
 			obligations = obl_loader.load_all()
 
 		if not obligations:
@@ -82,16 +87,21 @@ def resolve(
 		resource_ctx = _load_resource_context(resource_urn)
 		tags = resource_ctx.get('tags', {})
 
-		if tags:
-			console.print(f'[dim]Found tags for {resource_urn}: {tags}[/dim]')
-		else:
-			console.print(f'[dim]No tags found in inventory for {resource_urn}. Assuming empty context.[/dim]')
+		if not json_out:
+			if tags:
+				console.print(f'[dim]Found tags for {escape(resource_urn)}: {tags}[/dim]', emoji=False)
+			else:
+				console.print(
+					f'[dim]No tags found in inventory for {escape(resource_urn)}. Assuming empty context.[/dim]',
+					emoji=False,
+				)
 
 		# 4. Match (Filter Global -> Local)
 		matcher = ResourceMatcher()
 		applicable = [ob for ob in obligations if matcher.matches(resource_urn, tags, ob)]
 
-		console.print(f'[dim]Matched {len(applicable)}/{len(obligations)} obligations.[/dim]')
+		if not json_out:
+			console.print(f'[dim]Matched {len(applicable)}/{len(obligations)} obligations.[/dim]')
 
 		# 5. Run Engine
 		engine = ConflictResolutionEngine()
@@ -500,13 +510,15 @@ def _print_diff_report(report, reference_name):
 
 def _print_resolved_pretty(policy):
 	"""Prints a user-friendly report of the ResolvedPolicy."""
-	console.print(Panel(f'[bold cyan]Effective Policy: {policy.resource_urn}[/bold cyan]'))
+	safe_urn = escape(policy.resource_urn)
+	console.print(Panel(f'[bold cyan]Effective Policy: {safe_urn}[/bold cyan]'), emoji=False)
 
 	# 1. Retention
 	if policy.retention:
 		table = Table(title='Retention Policy', show_header=False, box=None)
 		table.add_row('Duration', str(policy.retention.duration))
-		table.add_row('Trigger', str(policy.retention.trigger))
+		trigger_display = getattr(policy.retention.trigger, 'name', str(policy.retention.trigger))
+		table.add_row('Trigger', trigger_display)
 		table.add_row('Legal Hold', '[red]Active[/red]' if policy.retention.is_indefinite else 'None')
 		table.add_row(
 			'[dim]Winner[/dim]',
