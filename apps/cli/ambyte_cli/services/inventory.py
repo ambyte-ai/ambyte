@@ -13,6 +13,7 @@ class ResourceItem(AmbyteBaseModel):
 	"""
 
 	urn: str = Field(..., description='The Unique Resource Name.')
+	platform: str = Field(..., description="The hosting platform (e.g. 'aws-s3', 'snowflake').")
 	tags: dict[str, str] = Field(default_factory=dict, description='Metadata tags used for policy targeting.')
 	description: str | None = None
 	config: dict[str, Any] = Field(default_factory=dict)
@@ -32,7 +33,7 @@ class InventoryLoader:
 	"""
 
 	def __init__(self, root_dir: Path):
-		self.inventory_path = root_dir / 'resources.yaml'
+		self.inventory_path = root_dir / 'resources' / 'resources.yaml'
 
 	def load(self) -> list[ResourceItem]:
 		"""
@@ -42,7 +43,11 @@ class InventoryLoader:
 		if not self.inventory_path.exists():
 			console.print(f'[dim]No inventory found at {self.inventory_path}. Using default wildcard context.[/dim]')
 			# Default for "Getting Started" - assumes one global resource
-			return [ResourceItem(urn='urn:local:default', tags={}, description='Auto-generated default context')]
+			return [
+				ResourceItem(
+					urn='urn:local:default', platform='local', tags={}, description='Auto-generated default context'
+				)
+			]
 
 		try:
 			with open(self.inventory_path, encoding='utf-8') as f:

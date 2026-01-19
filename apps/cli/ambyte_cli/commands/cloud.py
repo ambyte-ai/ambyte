@@ -270,7 +270,7 @@ def push(
 		console.print('Pruning requires a full directory sync to determine which policies to deactivate.')
 		raise typer.Exit(1)
 
-	if not valid_obs:
+	if not valid_obs and not prune:
 		console.print('[yellow]No policies found in the configured policies directory.[/yellow]')
 		return
 
