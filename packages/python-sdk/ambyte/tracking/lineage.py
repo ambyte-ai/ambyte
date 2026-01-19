@@ -44,8 +44,8 @@ class LineageTracer:
 
 		# 3. Emit "Run Started" Signal
 		payload = {
-			'id': self.run_id,
-			'type': self.run_type,
+			'external_run_id': self.run_id,
+			'run_type': self.run_type,
 			'start_time': self.start_time.isoformat(),
 			# We don't know success yet
 		}
@@ -63,13 +63,13 @@ class LineageTracer:
 		is_success = exc_type is None
 
 		# 4. Emit "Run Finished" Signal
-		run_payload = {'id': self.run_id, 'end_time': end_time.isoformat(), 'success': is_success}
+		run_payload = {'external_run_id': self.run_id, 'end_time': end_time.isoformat(), 'success': is_success}
 		self.tracker.enqueue('lineage_run', run_payload)
 
 		# 5. Emit the actual Lineage Edge (Inputs -> Outputs)
 		# Only emit if the job actually did something (or even if it failed, to track intent)
 		if self.inputs or self.outputs:
-			event_payload = {'run_id': self.run_id, 'input_urns': self.inputs, 'output_urns': self.outputs}
+			event_payload = {'external_run_id': self.run_id, 'input_urns': self.inputs, 'output_urns': self.outputs}
 			self.tracker.enqueue('lineage_event', event_payload)
 
 		# 6. Exit ContextVars Scope
@@ -84,7 +84,7 @@ def trace(
 	Wraps a block of code to track data lineage.
 
 	Usage:
-	with ambyte.lineage.trace(
+	with trace(
 	        inputs=["urn:s3:raw"],
 	        outputs=["urn:snowflake:clean"]
 	    ):

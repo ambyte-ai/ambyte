@@ -175,7 +175,9 @@ def list_logs(
 			is_sealed = log.get('block_id') is not None
 			status_icon = '🔒 Sealed' if is_sealed else '[yellow]⏳ Buffered[/yellow]'
 
-			table.add_row(log['id'], time_str, decision_txt, log['actor']['id'], log['action'], status_icon)
+			actor_id = log.get('actor_id', 'unknown')
+
+			table.add_row(log['id'], time_str, decision_txt, actor_id, log['action'], status_icon)
 
 		console.print(table)
 		console.print(

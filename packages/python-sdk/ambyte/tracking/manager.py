@@ -122,7 +122,7 @@ class TrackingManager:
 	def _send_audit_batch(self, batch: list[dict]):
 		try:
 			# Send the entire batch in one request
-			self.client._client.post('/v1/audit', json={'logs': batch})
+			self.client._client.post('/v1/audit/', json={'logs': batch})
 		except Exception as e:
 			logger.warning(f'Failed to upload audit batch: {e}')
 

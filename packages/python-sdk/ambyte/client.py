@@ -218,9 +218,9 @@ class AmbyteClient:
 			# Delegate to internal method that handles retries
 			response = self._send_check_request(payload)
 
-			# Expecting API format: {"result": "ALLOW" | "DENY", ...}
+			# API format: {"allowed": true, "reason": "..."}
 			data = response.json()
-			return data.get('result') == 'ALLOW'
+			return data.get('allowed') is True
 
 		except httpx.HTTPError as e:
 			# Catch connection errors or exhausted retries
@@ -249,7 +249,7 @@ class AmbyteClient:
 		try:
 			response = await self._send_check_request_async(payload)
 			data = response.json()
-			return data.get('result') == 'ALLOW'
+			return data.get('allowed') is True
 
 		except httpx.HTTPError as e:
 			return self._handle_connection_error(e)

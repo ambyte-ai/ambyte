@@ -221,8 +221,22 @@ class AuditService:
 
 		# 4. Map ORM -> Pydantic Response
 
+		# Map Evaluation Trace manually because of schema mismatch
+		# DB has 'ReasonTrace' (decision_reason), API needs 'PolicyEvaluationTrace' (reason_summary)
+		eval_trace_model = None
+		if log_orm.reason_trace:
+			raw_trace = log_orm.reason_trace
+			# Extract fields safely from the JSONB dict
+			eval_trace_model = PolicyEvaluationTrace(
+				reason_summary=raw_trace.get('decision_reason', 'Unknown'),
+				contributing_obligation_ids=[
+					p.get('obligation_id') for p in raw_trace.get('contributing_policies', [])
+				],
+				policy_version_hash=raw_trace.get('resolved_policy_hash') or '',
+				cache_hit=raw_trace.get('cache_hit', False),
+			)
+
 		# Map Log Entry
-		# (Reusing logic from _map_to_canonical conceptually, but mapping from DB model)
 		entry_model = AuditLogEntry(
 			id=str(log_orm.id),
 			timestamp=log_orm.timestamp,
@@ -230,9 +244,7 @@ class AuditService:
 			resource_urn=log_orm.resource_urn,
 			action=log_orm.action,
 			decision=Decision[log_orm.decision],
-			evaluation_trace=PolicyEvaluationTrace.model_validate(log_orm.reason_trace)
-			if log_orm.reason_trace
-			else None,
+			evaluation_trace=eval_trace_model,
 			request_context=log_orm.request_context or {},
 			entry_hash=log_orm.entry_hash,
 		)
