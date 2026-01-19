@@ -1,32 +1,94 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from src.api import deps
-from src.db.models.auth import User
+from src.core import security
+from src.db.models.auth import ApiKey, User
 from src.db.models.membership import ProjectMembership
 from src.db.models.tenancy import Project
 from src.db.session import get_db
 from src.schemas.auth import ProjectBrief, UserRead, WhoAmIResponse
 
 router = APIRouter()
+security_scheme = HTTPBearer(auto_error=True)
 
 
 @router.get('/whoami', response_model=WhoAmIResponse)
 async def who_am_i(
-	# This dependency validates the Clerk JWT and finds/creates the User in our DB
-	current_user: Annotated[User, Depends(deps.get_current_user)],
+	token_creds: Annotated[HTTPAuthorizationCredentials, Depends(security_scheme)],
 	db: Annotated[AsyncSession, Depends(get_db)],
 ):
 	"""
 	Identity Verification Endpoint.
-	Returns user profile details and all projects they have access to.
+	Supports both Human Users (Clerk JWT) and Machine Users (API Keys).
 	"""
+	token = token_creds.credentials
 
-	projects_with_roles: list[ProjectBrief] = []
+	# ==========================================================================
+	# PATH A: API KEY (Machine)
+	# ==========================================================================
+	if token.startswith('sk_live_') or token.startswith('sk_test_'):
+		key_hash = security.hash_token(token)
+
+		# Fetch Key + Project + Organization
+		# We need the deep nested Organization to fill the response
+		stmt = (
+			select(ApiKey)
+			.where(ApiKey.key_hash == key_hash)
+			.options(selectinload(ApiKey.project).selectinload(Project.organization))
+		)
+		result = await db.execute(stmt)
+		api_key = result.scalars().first()
+
+		if not api_key:
+			raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid API Key')
+
+		project = api_key.project
+		org = project.organization
+
+		return WhoAmIResponse(
+			user=UserRead(
+				id=api_key.id,  # Use Key ID as the Actor ID
+				email=f'machine-key-{api_key.prefix}...',  # Placeholder email
+				full_name=api_key.name,
+				is_superuser=False,
+			),
+			organization_id=org.id,
+			organization_name=org.name,
+			# API Keys are scoped to a single project, so we return just that one
+			projects=[ProjectBrief(id=project.id, name=project.name, role='machine_admin')],
+		)
+	# ==========================================================================
+	# PATH B: JWT (Human)
+	# ==========================================================================
+
+	# 1. Verify Signature
+	payload = await security.verify_clerk_token(token)
+	if not payload:
+		raise HTTPException(
+			status_code=status.HTTP_401_UNAUTHORIZED,
+			detail='Invalid or expired token',
+			headers={'WWW-Authenticate': 'Bearer'},
+		)
+
+	external_id = payload.get('sub')
+	if not external_id:
+		raise HTTPException(status_code=401, detail='Token missing subject')
+
+	# 2. Lookup User
+	query = select(User).where(User.external_id == external_id).options(selectinload(User.organization))
+	result = await db.execute(query)
+	current_user = result.scalars().first()
+
+	if not current_user:
+		# Note: Full JIT provisioning logic (creating new users) is handled
+		# by the browser flow or deps.get_current_user.
+		# For CLI usage, we assume the user exists.
+		raise HTTPException(status_code=401, detail='User not found in this organization')
 
 	if current_user.is_superuser:
 		# Superusers have access to all projects in the organization

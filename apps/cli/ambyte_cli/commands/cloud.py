@@ -7,9 +7,11 @@ import platform
 from pathlib import Path
 from typing import Annotated
 
+import ambyte
 import httpx
 import typer
 from ambyte.client import AmbyteClient
+from ambyte.config import get_config as get_sdk_config
 from ambyte_cli.config import get_workspace_root, load_config, save_config
 from ambyte_cli.services.api_client import CloudApiClient
 from ambyte_cli.services.auth import CredentialsManager
@@ -17,6 +19,7 @@ from ambyte_cli.services.loader import ObligationLoader
 from ambyte_cli.services.oidc import OidcService
 from ambyte_cli.services.sync import SyncService
 from ambyte_cli.ui.console import console
+from pydantic import HttpUrl
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Confirm, IntPrompt, Prompt
@@ -108,7 +111,7 @@ def login():
 		config = load_config()
 		base_url = str(config.cloud.url)
 	except Exception:
-		base_url = 'https://api.ambyte.ai'
+		base_url = 'http://localhost:8000'
 
 	if current_key:
 		if config and config.cloud.project_id:
@@ -394,6 +397,15 @@ def pull(
 
 		# 2. Initialize Services
 		# We use the SDK client to handle authentication headers and base URL
+		api_key = auth_svc.get_api_key()
+
+		# Ensure SDK points to the URL defined in .ambyte/config.yaml
+		sdk_cfg = get_sdk_config()
+		sdk_cfg.control_plane_url = HttpUrl(str(config.cloud.url))
+
+		# Initialize SDK singleton with the key
+		ambyte.init(api_key=api_key)
+
 		client = AmbyteClient.get_instance()
 		sync_svc = SyncService(config, client)
 

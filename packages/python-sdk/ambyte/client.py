@@ -137,7 +137,7 @@ class AmbyteClient:
 		"""
 		Internal wrapper to perform the request with retry logic.
 		"""
-		response = self._client.post('/v1/check', json=payload)
+		response = self._client.post('/v1/check/', json=payload)
 		response.raise_for_status()
 		return response
 
@@ -151,7 +151,7 @@ class AmbyteClient:
 		"""
 		Internal wrapper to perform the async request with retry logic.
 		"""
-		response = await self._async_client.post('/v1/check', json=payload)
+		response = await self._async_client.post('/v1/check/', json=payload)
 		response.raise_for_status()
 		return response
 
@@ -278,7 +278,7 @@ class AmbyteClient:
 		# MVP: Fire synchronous call inside a try/except to never crash execution
 		# Future: Move to BackgroundTask or Producer/Consumer Queue # TODO
 		try:
-			self._client.post('/v1/audit', json=payload)
+			self._client.post('/v1/audit/', json=payload)
 		except Exception as e:
 			# Never fail an application because logging failed
 			logger.warning(f'Failed to emit audit log: {e}')  # pylint: disable=logging-fstring-interpolation

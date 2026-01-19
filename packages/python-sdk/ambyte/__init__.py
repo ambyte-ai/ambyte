@@ -1,3 +1,5 @@
+from pydantic import SecretStr
+
 from ambyte.client import AmbyteClient
 from ambyte.config import AmbyteMode
 from ambyte.context import context
@@ -13,7 +15,7 @@ def init(api_key: str | None = None, mode: str | None = None):
 
 	cfg = get_config()
 	if api_key:
-		cfg.api_key = api_key  # type: ignore
+		cfg.api_key = SecretStr(api_key)
 	if mode:
 		cfg.mode = AmbyteMode(mode)
 
