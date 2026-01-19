@@ -1,14 +1,14 @@
 from typing import Annotated
 
+from ambyte_schemas.models.inventory import (
+	BatchResourceCreate,
+	ResourceResponse,
+)
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import VerifyScope, get_current_project
 from src.db.models.tenancy import Project
 from src.db.session import get_db
-from src.schemas.inventory import (
-	BatchResourceCreate,
-	ResourceResponse,
-)
 from src.services.inventory_service import InventoryService
 
 router = APIRouter()

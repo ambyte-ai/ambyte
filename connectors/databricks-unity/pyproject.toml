@@ -1,0 +1,22 @@
+[project]
+name = "ambyte-databricks"
+version = "0.1.0"
+description = "Ambyte Databricks Unity Connector"
+requires-python = ">=3.11"
+dependencies = [
+    "ambyte-schemas",
+    "databricks-sdk>=0.78.0",
+    "typer>=0.20.0",
+    "pydantic-settings>=2.12.0",
+    "httpx>=0.28.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+ambyte-schemas = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["ambyte_databricks"]

@@ -20,6 +20,7 @@ dependencies = [
     "ambyte-cli",
     "ambyte-audit",
     "ambyte-rules",
+    "ambyte-databricks",
 ]
 
 [tool.uv.workspace]
@@ -31,6 +32,7 @@ members = [
     # CONNECTORS - Do NOT use wildcard here because of Go code
     "connectors/airflow-operator",
     "connectors/python-common",
+    "connectors/databricks-unity",
     "schemas"
 ]
 
@@ -45,6 +47,7 @@ ambyte-compiler = { workspace = true }
 ambyte-cli = { workspace = true }
 ambyte-audit = { workspace = true }
 ambyte-rules = { workspace = true }
+ambyte-databricks = { workspace = true }
 torch = [
   { index = "pytorch-cpu", marker = "platform_system != 'Darwin'" }
 ]

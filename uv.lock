@@ -21,6 +21,7 @@ members = [
     "ambyte-compiler",
     "ambyte-connectors",
     "ambyte-control-plane-api",
+    "ambyte-databricks",
     "ambyte-ingest",
     "ambyte-platform",
     "ambyte-rules",
@@ -333,6 +334,27 @@ requires-dist = [
 ]
 
 [[package]]
+name = "ambyte-databricks"
+version = "0.1.0"
+source = { editable = "connectors/databricks-unity" }
+dependencies = [
+    { name = "ambyte-schemas" },
+    { name = "databricks-sdk" },
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ambyte-schemas", editable = "schemas" },
+    { name = "databricks-sdk", specifier = ">=0.78.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pydantic-settings", specifier = ">=2.12.0" },
+    { name = "typer", specifier = ">=0.20.0" },
+]
+
+[[package]]
 name = "ambyte-ingest"
 version = "0.1.0"
 source = { editable = "apps/ingest_worker" }
@@ -383,6 +405,7 @@ dependencies = [
     { name = "ambyte-compiler" },
     { name = "ambyte-connectors" },
     { name = "ambyte-control-plane-api" },
+    { name = "ambyte-databricks" },
     { name = "ambyte-ingest" },
     { name = "ambyte-rules" },
     { name = "ambyte-schemas" },
@@ -408,6 +431,7 @@ requires-dist = [
     { name = "ambyte-compiler", editable = "apps/policy_compiler" },
     { name = "ambyte-connectors", editable = "connectors/python-common" },
     { name = "ambyte-control-plane-api", editable = "apps/control_plane_api" },
+    { name = "ambyte-databricks", editable = "connectors/databricks-unity" },
     { name = "ambyte-ingest", editable = "apps/ingest_worker" },
     { name = "ambyte-rules", editable = "packages/rules-engine" },
     { name = "ambyte-schemas", editable = "schemas" },
@@ -1223,6 +1247,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a9/95/a3dbbb5028f35eafb79008e7522a75244477d2838f38cbb722248dabc2a8/cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c", size = 7615, upload-time = "2023-10-07T05:32:18.335Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30", size = 8321, upload-time = "2023-10-07T05:32:16.783Z" },
+]
+
+[[package]]
+name = "databricks-sdk"
+version = "0.78.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-auth" },
+    { name = "protobuf" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f8/7a/79097b58067a40fe254b5f6751b74fbae89156d29f92d26c33a090562a53/databricks_sdk-0.78.0.tar.gz", hash = "sha256:79d941459e7d31ebd89dc841ab2b5e1d8ec1bf05ac3ea26f6af26c815eaa8073", size = 829243, upload-time = "2026-01-15T07:48:43.376Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/65/9a/4240ac7d8249bc294ace26c6b90686dfe30120ea6f635ec7160a06e4b505/databricks_sdk-0.78.0-py3-none-any.whl", hash = "sha256:aa63085a03580d217324081f27ac25921be70859884eff97e6fd536884d55e65", size = 780542, upload-time = "2026-01-15T07:48:41.586Z" },
 ]
 
 [[package]]

@@ -1,11 +1,11 @@
 from uuid import UUID
 
+from ambyte_schemas.models.inventory import ResourceCreate
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.cache import cache
 from src.db.models.inventory import Resource as ResourceModel
-from src.schemas.inventory import ResourceCreate
 
 
 class InventoryService:
