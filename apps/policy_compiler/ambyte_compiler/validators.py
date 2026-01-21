@@ -115,6 +115,77 @@ class SnowflakeSqlValidator(ArtifactValidator):
 
 
 # ==============================================================================
+# DATABRICKS SQL VALIDATOR
+# ==============================================================================
+
+
+class DatabricksSqlValidator(ArtifactValidator):
+	"""
+	Validates Databricks Unity Catalog SQL statements.
+	Checks for:
+	1. Jinja rendering errors.
+	2. Basic SQL syntax structure.
+	3. Dangerous keywords (e.g. DROP CATALOG).
+	4. Unbalanced parentheses.
+	"""
+
+	DANGEROUS_KEYWORDS = [
+		'DROP CATALOG',
+		'DROP SCHEMA',
+		'DROP TABLE',
+		'DROP VIEW',
+		'DROP FUNCTION',
+		'DELETE FROM',
+		'GRANT ADMIN',
+	]
+
+	def validate(self, artifact: str | dict) -> ValidationResult:
+		result = ValidationResult(is_valid=True)
+
+		if not isinstance(artifact, str):
+			result.add_error(f'Expected SQL string, got {type(artifact)}')
+			return result
+
+		if not artifact.strip():
+			result.add_warning('Generated Databricks SQL is empty.')
+			return result
+
+		# 1. Check for Jinja Leakage
+		if '{{' in artifact or '}}' in artifact or '{%' in artifact:
+			result.add_error('Found unrendered Jinja tags. Template rendering failed.')
+
+		if 'UNDEFINED' in artifact:
+			result.add_error("Found 'UNDEFINED' in SQL. Verify template variables.")
+
+		# 2. Check for Dangerous Keywords
+		upper_sql = artifact.upper()
+		for kw in self.DANGEROUS_KEYWORDS:
+			if kw in upper_sql:
+				result.add_error(f"Dangerous keyword detected: '{kw}'")
+
+		# 3. Check Unbalanced Parentheses
+		if upper_sql.count('(') != upper_sql.count(')'):
+			result.add_error('Unbalanced parentheses detected in SQL.')
+
+		# 4. sqlparse Structure Check
+		try:
+			parsed = sqlparse.parse(artifact)
+			if not parsed:
+				result.add_error('SQL parsing failed: No statements found.')
+
+			# We expect CREATE FUNCTION or ALTER TABLE usually
+			allowed_types = ('CREATE', 'ALTER', 'COMMENT', 'SELECT')
+			for stmt in parsed:
+				type_str = stmt.get_type().upper()
+				if type_str != 'UNKNOWN' and type_str not in allowed_types:
+					result.add_warning(f"Unexpected statement type '{type_str}'. Expected CREATE, ALTER, or COMMENT.")
+		except Exception as e:
+			result.add_error(f'SQL syntax check failed: {str(e)}')
+
+		return result
+
+
+# ==============================================================================
 # IAM POLICY VALIDATOR
 # ==============================================================================
 
@@ -233,7 +304,7 @@ class LocalBundleValidator(ArtifactValidator):
 			result.is_valid = False
 			# Format Pydantic errors for readability
 			for err in e.errors():
-				loc = ' -> '.join(str(l) for l in err['loc'])
+				loc = ' -> '.join(str(loc_part) for loc_part in err['loc'])
 				result.errors.append(f"Schema Error at '{loc}': {err['msg']}")
 		except Exception as e:
 			result.add_error(f'Unexpected bundle error: {str(e)}')

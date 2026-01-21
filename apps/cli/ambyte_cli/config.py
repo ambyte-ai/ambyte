@@ -28,6 +28,7 @@ class TargetPlatform(StrEnum):
 	SNOWFLAKE = 'snowflake'  # SQL Dynamic Masking Policies
 	OPA = 'opa'  # Rego data bundles
 	AWS_IAM = 'aws_iam'  # JSON Identity Policies
+	DATABRICKS = 'databricks'  # SQL Dynamic Masking Policies
 
 
 class CloudConfig(BaseModel):

@@ -6,6 +6,7 @@ from ambyte_rules.models import ResolvedPolicy
 from ambyte_schemas.models.obligation import Obligation, PrivacyMethod
 
 from ambyte_compiler.generators import (
+	DatabricksGenerator,
 	IamPolicyBuilder,
 	LocalPythonGenerator,
 	RegoDataBuilder,
@@ -14,7 +15,7 @@ from ambyte_compiler.generators import (
 )
 from ambyte_compiler.matcher import ResourceMatcher
 
-TargetPlatform = Literal['snowflake', 'opa', 'aws_iam', 'local']
+TargetPlatform = Literal['snowflake', 'opa', 'aws_iam', 'local', 'databricks']
 
 
 class PolicyCompilerService:
@@ -34,8 +35,10 @@ class PolicyCompilerService:
 		# We initialize generators lazily or eagerly. Eager is fine for now.
 		if templates_path:
 			self.snowflake_gen = SnowflakeGenerator(template_dir=templates_path / 'snowflake')
+			self.databricks_gen = DatabricksGenerator(template_dir=templates_path / 'databricks')
 		else:
 			self.snowflake_gen = None  # type: ignore
+			self.databricks_gen = None  # type: ignore
 
 		self.rego_gen = RegoDataBuilder()
 		self.iam_gen = IamPolicyBuilder()
@@ -100,6 +103,8 @@ class PolicyCompilerService:
 			return self._compile_opa(effective_policy)
 		if target == 'aws_iam':
 			return self._compile_iam(effective_policy, context)
+		if target == 'databricks':
+			return self._compile_databricks(effective_policy, context)
 
 		raise ValueError(f'Unsupported compilation target: {target}')
 
@@ -211,3 +216,56 @@ class PolicyCompilerService:
 
 		# Default: Generate Identity / Guardrail Policy
 		return self.iam_gen.build_guardrail_policy(policy, resource_arn)
+
+	def _compile_databricks(self, policy: ResolvedPolicy, context: dict) -> str:
+		"""Generates Databricks Unity Catalog SQL."""
+		if not self.databricks_gen:
+			raise RuntimeError('DatabricksGenerator not initialized. Provide templates_path.')
+
+		# Extract context
+		input_type = str(context.get('input_type', 'STRING'))
+		ref_column = str(context.get('ref_column', 'id'))
+
+		allowed_groups = context.get('allowed_groups', [])
+		if isinstance(allowed_groups, str):
+			allowed_groups = [allowed_groups]
+
+		sql_statements = []
+		obs_count = len(policy.contributing_obligation_ids)
+
+		if policy.privacy:
+			pm_val = policy.privacy.method
+			pm_name = pm_val.name if hasattr(pm_val, 'name') else PrivacyMethod(pm_val).name
+			masking_sql = self.databricks_gen.generate_masking_udf(
+				policy_name=f'ambyte_mask_{policy.resource_urn.split(".")[-1]}',
+				input_type=input_type,
+				method=policy.privacy.method,
+				allowed_groups=allowed_groups,  # type: ignore
+				comment=(
+					f'Source: {policy.privacy.reason.winning_source_id}. Method: {pm_name}. Obligations: {obs_count}'
+				),
+			)
+			sql_statements.append(masking_sql)
+
+		if policy.purpose:
+			denied_list = sorted(policy.purpose.denied_purposes)
+			# Databricks Row Filter
+			row_filter_sql = self.databricks_gen.generate_row_filter_udf(
+				policy_name=f'ambyte_row_filter_{policy.resource_urn.split(".")[-1]}',
+				ref_column=ref_column,
+				input_type=input_type,
+				allowed_groups=allowed_groups,  # type: ignore
+				denied_groups=[],  # TODO: Support Denied Groups from Policy if needed
+				value_mapping={},  # TODO: Support Value Mapping
+				comment=(
+					f'Source: {policy.purpose.reason.winning_source_id}. '
+					f'Denied Purposes: {len(denied_list)}. '
+					f'Obligations: {obs_count}'
+				),
+			)
+			sql_statements.append(row_filter_sql)
+
+		if not sql_statements:
+			return f'-- No active Privacy or Purpose constraints found for {policy.resource_urn}'
+
+		return '\n\n'.join(sql_statements)
