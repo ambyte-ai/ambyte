@@ -43,7 +43,10 @@ def templates_dir(tmp_path: Path):
 	"""  # noqa: E501, E101
 	d = tmp_path / 'sql_templates'
 	d.mkdir()
-	p = d / 'masking.sql'
+
+	snowflake_dir = d / 'snowflake'
+	snowflake_dir.mkdir()
+	p = snowflake_dir / 'masking.sql'
 	p.write_text(sql_content)
 	return d
 

@@ -33,7 +33,7 @@ class PolicyCompilerService:
 		# 2. The Hands (Generators)
 		# We initialize generators lazily or eagerly. Eager is fine for now.
 		if templates_path:
-			self.snowflake_gen = SnowflakeGenerator(template_dir=templates_path)
+			self.snowflake_gen = SnowflakeGenerator(template_dir=templates_path / 'snowflake')
 		else:
 			self.snowflake_gen = None  # type: ignore
 

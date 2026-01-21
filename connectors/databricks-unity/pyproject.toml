@@ -20,3 +20,6 @@ ambyte-schemas = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["ambyte_databricks"]
+
+[project.scripts]
+ambyte-databricks = "ambyte_databricks.main:app"

@@ -140,6 +140,7 @@ dev-dependencies = [
     "hypothesis>=6.87.0,<7.0.0",
     "pyright>=1.1.403",
     "bandit>=1.7.5,<2.0.0",
+    "sqlfluff>=4.0.0",
 ]
 package = false
 

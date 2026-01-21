@@ -8,7 +8,7 @@ from databricks.sdk.core import DatabricksError
 from .config import settings
 from .crawler import UnityCatalogCrawler
 from .mapper import ResourceMapper
-from .sink import AmbyteSink
+from .sink import AmbyteSink, ConsoleSink, LocalFileSink
 
 # Configure a basic logger for the CLI output
 logging.basicConfig(
@@ -31,6 +31,10 @@ BATCH_SIZE = 50
 def sync_inventory(
 	dry_run: Annotated[
 		bool, typer.Option('--dry-run', help='Scan and print resources without sending to Ambyte.')
+	] = False,
+	output: Annotated[str, typer.Option('--output', '-o', help='Output file path for local mode.')] = 'resources.yaml',
+	local: Annotated[
+		bool, typer.Option('--local', help='Write inventory to a local file instead of the Control Plane.')
 	] = False,
 	verbose: Annotated[bool, typer.Option('--verbose', help='Enable debug logging.')] = False,
 ):
@@ -58,8 +62,13 @@ def sync_inventory(
 		crawler = UnityCatalogCrawler(db_client)
 		mapper = ResourceMapper()
 
-		# Only init sink if we intend to write data
-		sink = AmbyteSink() if not dry_run else None
+		# Select the correct sink strategy based on mode
+		if dry_run:
+			sink = ConsoleSink()
+		elif local:
+			sink = LocalFileSink(output_path=output)
+		else:
+			sink = AmbyteSink()
 
 	except Exception as e:
 		logger.critical(f'Initialization failed: {e}')
@@ -77,13 +86,8 @@ def sync_inventory(
 
 				# Flush buffer if full
 				if len(buffer) >= BATCH_SIZE:
-					if not dry_run and sink:
-						sink.push_batch(buffer)
-						total_synced += len(buffer)
-					else:
-						logger.info(f'[Dry Run] Would sync batch of {len(buffer)} items.')
-						for r in buffer:
-							logger.debug(f'  - {r.urn}')
+					sink.push_batch(buffer)
+					total_synced += len(buffer)
 
 					# Clear buffer
 					buffer.clear()
@@ -95,11 +99,8 @@ def sync_inventory(
 
 		# 4. Final Flush
 		if buffer:
-			if not dry_run and sink:
-				sink.push_batch(buffer)
-				total_synced += len(buffer)
-			else:
-				logger.info(f'[Dry Run] Would sync final batch of {len(buffer)} items.')
+			sink.push_batch(buffer)
+			total_synced += len(buffer)
 
 	except KeyboardInterrupt:
 		logger.warning('Sync interrupted by user.')

@@ -16,8 +16,11 @@ def mock_template_dir(tmp_path):
 	sql_dir = tmp_path / 'sql_templates'
 	sql_dir.mkdir()
 
+	snowflake_dir = sql_dir / 'snowflake'
+	snowflake_dir.mkdir()
+
 	# 1. Masking Template (Simplified for testing)
-	(sql_dir / 'masking.sql').write_text("""
+	(snowflake_dir / 'masking.sql').write_text("""
     CREATE OR REPLACE MASKING POLICY {{ policy_name }} AS (val {{ input_type }}) RETURNS {{ input_type }} ->
         CASE
             WHEN CURRENT_ROLE() IN ({% for role in allowed_roles %}'{{ role }}'{% if not loop.last %}, {% endif %}{% endfor %}) THEN val
@@ -27,7 +30,7 @@ def mock_template_dir(tmp_path):
     """)  # noqa: E501
 
 	# 2. Row Access Template
-	(sql_dir / 'row_access.sql').write_text("""
+	(snowflake_dir / 'row_access.sql').write_text("""
     CREATE OR REPLACE ROW ACCESS POLICY {{ policy_name }} AS ({{ ref_column }} {{ input_type }}) RETURNS BOOLEAN ->
         CASE
             {% if denied_tags %}
@@ -51,7 +54,7 @@ def mock_template_dir(tmp_path):
     """)  # noqa: E501, E101
 
 	# 3. Tag Binding Template
-	(sql_dir / 'tag_binding.sql').write_text("""
+	(snowflake_dir / 'tag_binding.sql').write_text("""
     ALTER TAG {{ tag_name }} SET MASKING POLICY {{ policy_name }};
     """)  # noqa: E501, E101
 

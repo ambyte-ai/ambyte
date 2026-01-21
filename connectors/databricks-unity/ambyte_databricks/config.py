@@ -3,7 +3,7 @@ from typing import Annotated, Any
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config as DatabricksSdkConfig
-from pydantic import BeforeValidator, Field, SecretStr
+from pydantic import BeforeValidator, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger('ambyte.connector.databricks')
@@ -36,17 +36,21 @@ class Settings(BaseSettings):
 		extra='ignore',
 	)
 
+	LOCAL_MODE: bool = Field(
+		default=False, description='If True, writes inventory to a local file instead of the Control Plane.'
+	)
+
 	# ==========================================================================
 	# 1. Ambyte Control Plane Configuration
 	# ==========================================================================
 	CONTROL_PLANE_URL: Annotated[str, BeforeValidator(lambda v: str(v))] = Field(
-		default='http://localhost:8000',
+		default='http://localhost:8000',  # TODO: change to api.ambyte.ai in prod
 		description='Base URL of the Ambyte Control Plane API.',
 	)
 
-	CONNECTOR_API_KEY: SecretStr = Field(
-		...,
-		description="Machine API Key with 'resource:write' scope.",
+	CONNECTOR_API_KEY: SecretStr | None = Field(
+		default=None,
+		description='Machine API Key. Required if LOCAL_MODE is False.',
 	)
 
 	# ==========================================================================
@@ -98,6 +102,16 @@ class Settings(BaseSettings):
 	# 4. Helpers
 	# ==========================================================================
 
+	@model_validator(mode='after')
+	def validate_auth_mode(self) -> 'Settings':
+		# If we are NOT local, we MUST have an API Key to talk to the cloud
+		if not self.LOCAL_MODE and not self.CONNECTOR_API_KEY:
+			raise ValueError(
+				'Missing AMBYTE_DATABRICKS_CONNECTOR_API_KEY. '
+				'Set this to sync with the Cloud, or use --local to run offline.'
+			)
+		return self
+
 	def get_databricks_client(self) -> WorkspaceClient:
 		"""
 		Returns an authenticated Databricks WorkspaceClient.
@@ -118,7 +132,7 @@ class Settings(BaseSettings):
 
 	@property
 	def control_plane_api_key_val(self) -> str:
-		return self.CONNECTOR_API_KEY.get_secret_value()
+		return self.CONNECTOR_API_KEY.get_secret_value() if self.CONNECTOR_API_KEY else ''
 
 
 # Singleton instance

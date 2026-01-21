@@ -1,6 +1,8 @@
 import logging
+from pathlib import Path
 
 import httpx
+import yaml
 from ambyte_schemas.models.inventory import BatchResourceCreate, ResourceCreate
 
 from .config import settings
@@ -72,3 +74,43 @@ class AmbyteSink:
 	def close(self):
 		"""Clean up the connection pool."""
 		self.client.close()
+
+
+class LocalFileSink:
+	"""Open Source Mode: Writes to resources.yaml for local compilation"""
+
+	def __init__(self, output_path: str = 'resources.yaml'):
+		self.output_path = Path(output_path)
+		self.all_resources: list[dict] = []
+
+	def push_batch(self, resources: list[ResourceCreate]) -> int:
+		# We accumulate everything in memory for local file write
+		# (Inventory lists are usually small enough for RAM)
+		for r in resources:
+			# Dump to JSON-compatible dict to handle Datetime/Enums
+			self.all_resources.append(r.model_dump(mode='json'))
+		return len(resources)
+
+	def close(self):
+		"""Write the accumulated list to disk on close"""
+		if not self.all_resources:
+			return
+
+		data = {'resources': self.all_resources}
+
+		with open(self.output_path, 'w', encoding='utf-8') as f:
+			yaml.dump(data, f, sort_keys=False)
+
+		logger.info(f'Inventory written to {self.output_path.absolute()}')
+
+
+class ConsoleSink:
+	"""Dry Run Mode"""
+
+	def push_batch(self, resources: list[ResourceCreate]) -> int:
+		for r in resources:
+			logger.info(f'[Dry Run] Found: {r.urn}')
+		return len(resources)
+
+	def close(self):
+		pass
