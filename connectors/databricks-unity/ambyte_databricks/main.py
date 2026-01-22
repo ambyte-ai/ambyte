@@ -24,10 +24,13 @@ app = typer.Typer(
 	no_args_is_help=True,
 )
 
+inventory_app = typer.Typer(help='Manage metadata and resource inventory.')
+app.add_typer(inventory_app, name='inventory')
+
 BATCH_SIZE = 50
 
 
-@app.command()
+@inventory_app.command(name='sync')
 def sync_inventory(
 	dry_run: Annotated[
 		bool, typer.Option('--dry-run', help='Scan and print resources without sending to Ambyte.')

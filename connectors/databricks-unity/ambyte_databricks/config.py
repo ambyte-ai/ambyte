@@ -3,7 +3,7 @@ from typing import Annotated, Any
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config as DatabricksSdkConfig
-from pydantic import BeforeValidator, Field, SecretStr, model_validator
+from pydantic import AliasChoices, BeforeValidator, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger('ambyte.connector.databricks')
@@ -48,9 +48,10 @@ class Settings(BaseSettings):
 		description='Base URL of the Ambyte Control Plane API.',
 	)
 
-	CONNECTOR_API_KEY: SecretStr | None = Field(
+	API_KEY: SecretStr | None = Field(
 		default=None,
-		description='Machine API Key. Required if LOCAL_MODE is False.',
+		validation_alias=AliasChoices('CONNECTOR_API_KEY', 'AMBYTE_API_KEY'),
+		description='Machine API Key with resource:write scope.',
 	)
 
 	# ==========================================================================
@@ -81,7 +82,23 @@ class Settings(BaseSettings):
 	)
 
 	# ==========================================================================
-	# 3. Scoping & Filtering
+	# 3. Execution Config
+	# ==========================================================================
+	WAREHOUSE_ID: str | None = Field(
+		default=None,
+		description='SQL Warehouse ID for executing governance SQL.',
+	)
+	GOVERNANCE_CATALOG: str = Field(
+		default='main',
+		description='Catalog where governance SQL will be executed.',
+	)
+	GOVERNANCE_SCHEMA: str = Field(
+		default='ambyte_governance',
+		description='Schema where governance SQL will be executed.',
+	)
+
+	# ==========================================================================
+	# 4. Scoping & Filtering
 	# ==========================================================================
 	INCLUDE_CATALOGS: Annotated[list[str], BeforeValidator(parse_csv)] = Field(
 		default=['*'],
@@ -105,10 +122,9 @@ class Settings(BaseSettings):
 	@model_validator(mode='after')
 	def validate_auth_mode(self) -> 'Settings':
 		# If we are NOT local, we MUST have an API Key to talk to the cloud
-		if not self.LOCAL_MODE and not self.CONNECTOR_API_KEY:
+		if not self.LOCAL_MODE and not self.API_KEY:
 			raise ValueError(
-				'Missing AMBYTE_DATABRICKS_CONNECTOR_API_KEY. '
-				'Set this to sync with the Cloud, or use --local to run offline.'
+				'Missing AMBYTE_DATABRICKS_API_KEY. Set this to sync with the Cloud, or use --local to run offline.'
 			)
 		return self
 
@@ -132,7 +148,7 @@ class Settings(BaseSettings):
 
 	@property
 	def control_plane_api_key_val(self) -> str:
-		return self.CONNECTOR_API_KEY.get_secret_value() if self.CONNECTOR_API_KEY else ''
+		return self.API_KEY.get_secret_value() if self.API_KEY else ''
 
 
 # Singleton instance

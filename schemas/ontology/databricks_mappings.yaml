@@ -1,0 +1,63 @@
+# Ambyte Group Mapping Configuration for Databricks
+# Maps high-level Data Purposes (from Ambyte Ontology) to concrete Databricks Account Groups.
+# Used by the Connector to generate 'is_account_group_member()' checks in SQL functions.
+
+platform: databricks
+
+mappings:
+  # ============================================================================
+  # BUSINESS FUNCTIONS
+  # ============================================================================
+
+  - purpose: "MARKETING"
+    associated_groups:
+      - "marketing-analysts"
+      - "campaign-managers"
+      - "growth-team"
+
+  - purpose: "ANALYTICS"
+    associated_groups:
+      - "data-scientists"
+      - "bi-analysts"
+      - "product-managers"
+
+  - purpose: "FINANCE"
+    associated_groups:
+      - "finance-team"
+      - "auditors"
+
+  - purpose: "HR_ADMIN"
+    associated_groups:
+      - "hr-admins"
+      - "people-ops"
+
+  # ============================================================================
+  # TECHNICAL ROLES
+  # ============================================================================
+
+  - purpose: "AI_TRAINING"
+    associated_groups:
+      - "ml-engineers"
+      - "data-engineers" # Often need raw access for pipelines
+
+  - purpose: "DEBUGGING"
+    associated_groups:
+      - "developers"
+      - "platform-engineers"
+
+  - purpose: "ETL_PIPELINE"
+    associated_groups:
+      - "service-principals" # Generic group for automated jobs
+      - "airflow-workers"
+
+# ==============================================================================
+# SAFETY VALVES
+# These groups are always added to the ALLOW list in generated SQL to prevent lockouts.
+# ==============================================================================
+default_admin_groups:
+  - "admin" # The workspace admin group
+  - "metastore_admins" # Unity Catalog admins
+  - "ambyte_platform_admin" # Dedicated service principal group for this tool
+
+# Standard Tag Key used for Tag-Based Masking (if applicable)
+standard_pii_tag: "governance.pii_category"
