@@ -5,7 +5,7 @@ import httpx
 import yaml
 from ambyte_schemas.models.inventory import BatchResourceCreate, ResourceCreate
 
-from .config import settings
+from ambyte_databricks.config import settings
 
 logger = logging.getLogger('ambyte.connector.databricks.sink')
 

@@ -3,8 +3,8 @@ from urllib.parse import urlparse
 
 from ambyte_schemas.models.inventory import ResourceCreate
 
-from .config import settings
-from .crawler import DiscoveredAsset
+from ambyte_databricks.config import settings
+from ambyte_databricks.crawler import DiscoveredAsset
 
 logger = logging.getLogger('ambyte.connector.databricks.mapper')
 

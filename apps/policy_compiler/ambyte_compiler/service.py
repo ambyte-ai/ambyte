@@ -108,6 +108,35 @@ class PolicyCompilerService:
 
 		raise ValueError(f'Unsupported compilation target: {target}')
 
+	def compile_from_policy(
+		self,
+		policy: ResolvedPolicy,
+		target: TargetPlatform,
+		context: dict[str, str | list[str]] | None = None,
+	) -> str | dict:
+		"""
+		Compiles a pre-resolved ResolvedPolicy object into an executable artifact.
+
+		This bypasses matching and resolution, making it ideal for Connectors
+		that read a pre-compiled 'local_policies.json' bundle.
+		"""
+		if context is None:
+			context = {}
+
+		if target == 'snowflake':
+			return self._compile_snowflake(policy, context)
+		if target == 'opa':
+			return self._compile_opa(policy)
+		if target == 'aws_iam':
+			return self._compile_iam(policy, context)
+		if target == 'databricks':
+			return self._compile_databricks(policy, context)
+
+		if target == 'local':
+			return policy.model_dump_json(exclude_none=True)
+
+		raise ValueError(f'Unsupported compilation target: {target}')
+
 	def _compile_local(self, resources: list[dict[str, Any]], obligations: list[Obligation], context: dict) -> str:
 		"""
 		Generates the 'local_policies.json' Bundle used by ambyte-sdk in LOCAL mode.

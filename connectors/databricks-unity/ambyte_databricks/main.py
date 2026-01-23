@@ -1,14 +1,21 @@
 import logging
 import time
+from pathlib import Path
 from typing import Annotated
 
 import typer
+import yaml
+from ambyte_schemas.models.artifact import PolicyBundle
+from ambyte_schemas.models.inventory import ResourceCreate
 from databricks.sdk.core import DatabricksError
 
-from .config import settings
-from .crawler import UnityCatalogCrawler
-from .mapper import ResourceMapper
-from .sink import AmbyteSink, ConsoleSink, LocalFileSink
+from ambyte_databricks.config import settings
+from ambyte_databricks.crawler import UnityCatalogCrawler
+from ambyte_databricks.enforcer import PolicyEnforcer
+from ambyte_databricks.executor import SqlExecutor
+from ambyte_databricks.mapper import ResourceMapper
+from ambyte_databricks.sink import AmbyteSink, ConsoleSink, LocalFileSink
+from ambyte_databricks.state import GovernanceState
 
 # Configure a basic logger for the CLI output
 logging.basicConfig(
@@ -26,6 +33,9 @@ app = typer.Typer(
 
 inventory_app = typer.Typer(help='Manage metadata and resource inventory.')
 app.add_typer(inventory_app, name='inventory')
+
+policy_app = typer.Typer(help='Enforce governance policies.')
+app.add_typer(policy_app, name='policy')
 
 BATCH_SIZE = 50
 
@@ -127,6 +137,93 @@ def sync_inventory(
 	else:
 		logger.info('Total Synced:  0 (Dry Run)')
 	logger.info('=' * 40)
+
+
+@policy_app.command(name='enforce')
+def enforce_policies(
+	bundle_path: Annotated[
+		str, typer.Option('--bundle', help='Path to the compiled local_policies.json.')
+	] = '.ambyte/dist/local_policies.json',
+	inventory_path: Annotated[
+		str, typer.Option('--inventory', help='Path to the resources.yaml inventory file.')
+	] = 'resources.yaml',
+	warehouse_id: Annotated[
+		str | None, typer.Option('--warehouse-id', help='Override SQL Warehouse ID from env vars.')
+	] = None,
+	dry_run: Annotated[bool, typer.Option('--dry-run', help='Generate SQL plan without executing.')] = False,
+	verbose: Annotated[bool, typer.Option('--verbose', help='Enable debug logging.')] = False,
+):
+	"""
+	Applies compiled policies to Databricks Unity Catalog.
+	Creates Row Filters and Column Masks as SQL UDFs and binds them to tables.
+	"""
+	if verbose:
+		logging.getLogger('ambyte').setLevel(logging.DEBUG)
+		logger.debug('Debug logging enabled.')
+
+	# 1. Load Artifacts
+	logger.info('Loading policy artifacts...')
+
+	try:
+		# Load Policy Bundle
+		b_path = Path(bundle_path)
+		if not b_path.exists():
+			logger.critical(f"Policy bundle not found at {b_path}. Run 'ambyte build' first.")
+			raise typer.Exit(1)
+
+		with open(b_path, encoding='utf-8') as f:
+			bundle_json = f.read()
+		bundle = PolicyBundle.model_validate_json(bundle_json)
+		logger.info(f'Loaded bundle v{bundle.schema_version} ({len(bundle.policies)} policies)')
+
+		# Load Inventory
+		# Note: resources.yaml structure is {"resources": [...]}
+		i_path = Path(inventory_path)
+		if not i_path.exists():
+			logger.critical(f"Inventory not found at {i_path}. Run 'ambyte-databricks inventory sync' first.")
+			raise typer.Exit(1)
+
+		with open(i_path, encoding='utf-8') as f:
+			inv_data = yaml.safe_load(f) or {}
+
+		# Parse list of dicts back into ResourceCreate objects
+		raw_resources = inv_data.get('resources', [])
+		inventory = [ResourceCreate(**r) for r in raw_resources]
+		logger.info(f'Loaded {len(inventory)} resources from inventory.')
+
+	except Exception as e:
+		logger.critical(f'Failed to load artifacts: {e}')
+		raise typer.Exit(1) from e
+
+	# 2. Initialize Infrastructure
+	if warehouse_id:
+		settings.WAREHOUSE_ID = warehouse_id
+
+	if not settings.WAREHOUSE_ID and not dry_run:
+		logger.critical(
+			'Warehouse ID is required for enforcement. Set AMBYTE_DATABRICKS_WAREHOUSE_ID or use --warehouse-id.'
+		)
+		raise typer.Exit(1)
+
+	try:
+		client = settings.get_databricks_client()
+
+		# Executor handles SQL submission
+		executor = SqlExecutor(client)
+
+		# State manager fetches current UDFs
+		state_manager = GovernanceState(client)
+
+		enforcer = PolicyEnforcer(executor, state_manager)
+
+		# 3. Execute
+		enforcer.enforce(bundle, inventory, dry_run=dry_run)
+
+		logger.info('Enforcement cycle complete.')
+
+	except Exception as e:
+		logger.critical(f'Enforcement failed: {e}', exc_info=verbose)
+		raise typer.Exit(1) from e
 
 
 if __name__ == '__main__':

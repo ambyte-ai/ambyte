@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import DatabricksError
 
-from .config import settings
+from ambyte_databricks.config import settings
 
 logger = logging.getLogger('ambyte.connector.databricks.state')
 
