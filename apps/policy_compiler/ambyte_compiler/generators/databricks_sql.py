@@ -167,15 +167,147 @@ class DatabricksGenerator:
 
 	def _normalize_type(self, type_str: str) -> str:
 		"""
-		Maps generic or Snowflake types to Databricks Spark SQL types.
+		Maps generic SQL types to Databricks Spark SQL types.
+
+		Handles:
+		- Standard SQL types (VARCHAR, INTEGER, etc.)
+		- Snowflake-specific types (NUMBER, TEXT, etc.)
+		- Spark SQL complex types (ARRAY<T>, MAP<K,V>, STRUCT<...>)
+		- Precision/scale specifications (DECIMAL(10,2), etc.)
 		"""
-		t = type_str.upper()
-		if 'VARCHAR' in t or 'TEXT' in t or 'CHAR' in t:
+		if not type_str:
+			logger.warning('Empty type string provided, defaulting to STRING')
 			return 'STRING'
-		if 'NUMBER' in t or 'INTEGER' in t:
-			return 'INT'  # or BIGINT based on precision, simple INT for now
+
+		t = type_str.strip().upper()
+
+		# ==================================================================
+		# 1. STRING TYPES
+		# ==================================================================
+		if any(s in t for s in ['VARCHAR', 'TEXT', 'CHAR', 'CLOB', 'STRING']):
+			return 'STRING'
+
+		# ==================================================================
+		# 2. NUMERIC TYPES - Integer Family
+		# ==================================================================
+		# BIGINT: 64-bit signed integer
+		if 'BIGINT' in t or 'INT8' in t or 'LONG' in t:
+			return 'BIGINT'
+
+		# SMALLINT: 16-bit signed integer
+		if 'SMALLINT' in t or 'INT2' in t:
+			return 'SMALLINT'
+
+		# TINYINT: 8-bit signed integer
+		if 'TINYINT' in t or 'INT1' in t or 'BYTE' in t:
+			return 'TINYINT'
+
+		# INT: 32-bit signed integer (default for INTEGER/INT)
+		if 'INT' in t:  # Matches INT, INTEGER, INT4
+			return 'INT'
+
+		# ==================================================================
+		# 3. NUMERIC TYPES - Decimal/Float Family
+		# ==================================================================
+		# DECIMAL/NUMERIC with precision (preserve precision spec)
+		if 'DECIMAL' in t or 'NUMERIC' in t or 'NUMBER' in t:
+			# Preserve precision if specified: DECIMAL(10,2) -> DECIMAL(10,2)
+			# Otherwise default to DECIMAL (Spark default precision)
+			import re
+
+			precision_match = re.search(r'\([\d,\s]+\)', t)
+			if precision_match:
+				return f'DECIMAL{precision_match.group()}'
+			return 'DECIMAL'
+
+		# DOUBLE: 64-bit floating point
+		if 'DOUBLE' in t or 'FLOAT8' in t:
+			return 'DOUBLE'
+
+		# FLOAT: 32-bit floating point
+		if 'FLOAT' in t or 'REAL' in t or 'FLOAT4' in t:
+			return 'FLOAT'
+
+		# ==================================================================
+		# 4. BOOLEAN
+		# ==================================================================
 		if 'BOOL' in t:
 			return 'BOOLEAN'
-		# Databricks supports ARRAY<T>, MAP<K,V>, STRUCT...
-		# We assume complex types are passed correctly or handled as strings for now. # TODO
+
+		# ==================================================================
+		# 5. DATE/TIME TYPES
+		# ==================================================================
+		if 'TIMESTAMP' in t:
+			# Spark has TIMESTAMP and TIMESTAMP_NTZ (no timezone)
+			if 'NTZ' in t or 'WITHOUT' in t:
+				return 'TIMESTAMP_NTZ'
+			return 'TIMESTAMP'
+
+		if 'DATE' in t:
+			return 'DATE'
+
+		if 'TIME' in t and 'STAMP' not in t:
+			# Spark doesn't have TIME type, use STRING for time-only values
+			logger.warning(f"TIME type '{type_str}' not supported in Spark, using STRING")
+			return 'STRING'
+
+		if 'INTERVAL' in t:
+			return 'INTERVAL'
+
+		# ==================================================================
+		# 6. BINARY TYPES
+		# ==================================================================
+		if 'BINARY' in t or 'VARBINARY' in t or 'BLOB' in t or 'BYTES' in t:
+			return 'BINARY'
+
+		# ==================================================================
+		# 7. COMPLEX TYPES - Already Spark format, normalize case
+		# ==================================================================
+		# ARRAY<element_type>
+		if t.startswith('ARRAY'):
+			# Recursively normalize the element type
+			match = self._extract_complex_type_params(type_str)
+			if match:
+				inner_type = self._normalize_type(match)
+				return f'ARRAY<{inner_type}>'
+			return 'ARRAY<STRING>'  # Fallback
+
+		# MAP<key_type, value_type>
+		if t.startswith('MAP'):
+			match = self._extract_complex_type_params(type_str)
+			if match and ',' in match:
+				parts = match.split(',', 1)
+				key_type = self._normalize_type(parts[0].strip())
+				val_type = self._normalize_type(parts[1].strip())
+				return f'MAP<{key_type},{val_type}>'
+			return 'MAP<STRING,STRING>'  # Fallback
+
+		# STRUCT<field:type, ...>
+		if t.startswith('STRUCT'):
+			# STRUCT types are complex; pass through with case normalization
+			# Full parsing would require recursive handling of nested fields
+			return type_str.upper()
+
+		# ==================================================================
+		# 8. VARIANT (Databricks-specific semi-structured)
+		# ==================================================================
+		if 'VARIANT' in t or 'JSON' in t:
+			# Databricks uses STRING for JSON, VARIANT is Unity Catalog specific
+			return 'STRING'
+
+		# ==================================================================
+		# 9. UNRECOGNIZED - Log and pass through
+		# ==================================================================
+		logger.debug(f"Unrecognized type '{type_str}', passing through as-is")
 		return t
+
+	def _extract_complex_type_params(self, type_str: str) -> str | None:
+		"""
+		Extracts the inner parameters from complex types.
+		E.g., 'ARRAY<STRING>' -> 'STRING'
+		      'MAP<STRING, INT>' -> 'STRING, INT'
+		"""  # noqa: E101
+		import re
+
+		match = re.search(r'<(.+)>$', type_str, re.IGNORECASE)
+		return match.group(1) if match else None

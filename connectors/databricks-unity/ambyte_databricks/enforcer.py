@@ -38,8 +38,6 @@ class PolicyEnforcer:
 		base_path = current_file.parent.parent.parent.parent / 'policy-library' / 'sql_templates'
 		if not base_path.exists():
 			# Try standard install location if package
-			# We use the current file's parent because ambyte_databricks is a namespace package
-			# and might not have a __file__ attribute.
 			base_path = current_file.parent / 'templates'
 
 		if not base_path.exists():
