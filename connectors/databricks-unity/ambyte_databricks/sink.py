@@ -1,13 +1,28 @@
 import logging
 from pathlib import Path
+from typing import Protocol
 
 import httpx
 import yaml
 from ambyte_schemas.models.inventory import BatchResourceCreate, ResourceCreate
+from ambyte_schemas.models.lineage import LineageEvent, Run
 
 from ambyte_databricks.config import settings
 
 logger = logging.getLogger('ambyte.connector.databricks.sink')
+
+
+class SinkProtocol(Protocol):
+	"""
+	Interface definition for all Sink implementations.
+	Ensures type safety when swapping between AmbyteSink, ConsoleSink, etc.
+	"""
+
+	def push_batch(self, resources: list[ResourceCreate]) -> int: ...
+
+	def push_lineage(self, run: Run, event: LineageEvent) -> None: ...
+
+	def close(self) -> None: ...
 
 
 class AmbyteSink:
@@ -16,6 +31,10 @@ class AmbyteSink:
 	"""
 
 	def __init__(self):
+		if not settings.control_plane_api_key_val:
+			raise ValueError(
+				'Missing API Key. To push lineage or inventory to the Cloud, you must set AMBYTE_DATABRICKS_API_KEY.'
+			)
 		self.client = httpx.Client(
 			base_url=str(settings.CONTROL_PLANE_URL).rstrip('/'),
 			headers={
@@ -71,6 +90,54 @@ class AmbyteSink:
 			logger.error(f'Network Error connecting to Control Plane: {e}')
 			raise e
 
+	def push_lineage(self, run: Run, event: LineageEvent) -> None:
+		"""
+		Sends Lineage data.
+		Note: We must push the 'Run' first, as the 'Event' has a foreign key to it.
+		"""
+		try:
+			# 1. Push Run (Upsert semantics in API)
+			# We map our internal Domain Model (Run) to the API Payload.
+			run_payload = {
+				'external_run_id': run.id,
+				'run_type': run.type.name if hasattr(run.type, 'name') else str(run.type),
+				'triggered_by': run.triggered_by.id if run.triggered_by else None,
+				'started_at': run.start_time.isoformat() if run.start_time else None,
+				'ended_at': run.end_time.isoformat() if run.end_time else None,
+				'success': run.success,
+			}
+
+			resp_run = self.client.post('/v1/lineage/run', json=run_payload)
+			resp_run.raise_for_status()
+
+			# 2. Push Event (Edges)
+			event_payload = {'external_run_id': event.run_id, 'inputs': event.input_urns, 'outputs': event.output_urns}
+
+			resp_event = self.client.post('/v1/lineage/event', json=event_payload)
+			resp_event.raise_for_status()
+
+			logger.debug(f'Pushed lineage for run {run.id}')
+
+		except httpx.HTTPStatusError as e:
+			self._handle_http_error(e)
+			# We log error but don't re-raise here to allow the loop to continue
+			# processing other lineage events if one is malformed.
+			logger.error(f'Failed to push lineage event {event.run_id}')
+		except httpx.RequestError as e:
+			logger.error(f'Network Error: {e}')
+
+	def _handle_http_error(self, e: httpx.HTTPStatusError):
+		"""Standard error formatting"""
+		code = e.response.status_code
+		if code == 401:
+			logger.critical('Authentication Failed. Check AMBYTE_DATABRICKS_API_KEY.')
+		elif code == 403:
+			logger.critical('Permission Denied. Ensure API Key has correct scopes (resource:write, lineage:write).')
+		elif code == 422:
+			logger.error(f'Validation Error: {e.response.text}')
+		else:
+			logger.error(f'API Error ({code}): {e.response.text}')
+
 	def close(self):
 		"""Clean up the connection pool."""
 		self.client.close()
@@ -90,6 +157,15 @@ class LocalFileSink:
 			# Dump to JSON-compatible dict to handle Datetime/Enums
 			self.all_resources.append(r.model_dump(mode='json'))
 		return len(resources)
+
+	def push_lineage(self, run: Run, event: LineageEvent) -> None:
+		"""
+		Local lineage isn't fully supported as a file format yet,
+		but we log it for debug.
+		"""
+		logger.info(
+			f'[Local] Lineage Captured: {run.id} | {len(event.input_urns)} inputs -> {len(event.output_urns)} outputs'
+		)
 
 	def close(self):
 		"""Write the accumulated list to disk on close"""
@@ -111,6 +187,12 @@ class ConsoleSink:
 		for r in resources:
 			logger.info(f'[Dry Run] Found: {r.urn}')
 		return len(resources)
+
+	def push_lineage(self, run: Run, event: LineageEvent) -> None:
+		inputs = ', '.join(event.input_urns) or 'None'
+		outputs = ', '.join(event.output_urns) or 'None'
+		user = run.triggered_by.id if run.triggered_by else 'Unknown'
+		logger.info(f'[Dry Run] Lineage: [{inputs}] -> [{outputs}] by {user}')
 
 	def close(self):
 		pass

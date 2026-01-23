@@ -13,8 +13,9 @@ from ambyte_databricks.config import settings
 from ambyte_databricks.crawler import UnityCatalogCrawler
 from ambyte_databricks.enforcer import PolicyEnforcer
 from ambyte_databricks.executor import SqlExecutor
+from ambyte_databricks.lineage import LineageExtractor
 from ambyte_databricks.mapper import ResourceMapper
-from ambyte_databricks.sink import AmbyteSink, ConsoleSink, LocalFileSink
+from ambyte_databricks.sink import AmbyteSink, ConsoleSink, LocalFileSink, SinkProtocol
 from ambyte_databricks.state import GovernanceState
 
 # Configure a basic logger for the CLI output
@@ -36,6 +37,9 @@ app.add_typer(inventory_app, name='inventory')
 
 policy_app = typer.Typer(help='Enforce governance policies.')
 app.add_typer(policy_app, name='policy')
+
+lineage_app = typer.Typer(help='Extract and sync data lineage.')
+app.add_typer(lineage_app, name='lineage')
 
 BATCH_SIZE = 50
 
@@ -130,7 +134,7 @@ def sync_inventory(
 	duration = time.time() - start_time
 	logger.info('=' * 40)
 	logger.info('SYNC COMPLETE')
-	logger.info(f'Duration:      {duration:.2f}s')
+	logger.info(f'Duration:	  {duration:.2f}s')
 	logger.info(f'Total Scanned: {total_scanned}')
 	if not dry_run:
 		logger.info(f'Total Synced:  {total_synced}')
@@ -224,6 +228,63 @@ def enforce_policies(
 	except Exception as e:
 		logger.critical(f'Enforcement failed: {e}', exc_info=verbose)
 		raise typer.Exit(1) from e
+
+
+@lineage_app.command(name='sync')
+def sync_lineage(
+	lookback_hours: Annotated[int, typer.Option(help='Hours of history to fetch from system tables.')] = 24,
+	warehouse_id: Annotated[str | None, typer.Option('--warehouse-id', help='Override SQL Warehouse ID.')] = None,
+	dry_run: Annotated[bool, typer.Option('--dry-run', help='Fetch lineage but do not push to Ambyte.')] = False,
+	verbose: Annotated[bool, typer.Option('--verbose', help='Enable debug logging.')] = False,
+):
+	"""
+	Crawls 'system.access.table_lineage' and pushes graph edges to Ambyte.
+	"""
+	if verbose:
+		logging.getLogger('ambyte').setLevel(logging.DEBUG)
+		logger.debug('Debug logging enabled.')
+
+	# 1. Config Check
+	if warehouse_id:
+		settings.WAREHOUSE_ID = warehouse_id
+
+	if not settings.WAREHOUSE_ID:
+		logger.critical('Warehouse ID is required to query system tables. Set AMBYTE_DATABRICKS_WAREHOUSE_ID.')
+		raise typer.Exit(1)
+
+	logger.info(f'Starting Lineage Sync (Lookback: {lookback_hours}h, Dry Run: {dry_run})')
+
+	sink: SinkProtocol | None = None
+
+	try:
+		# 2. Initialize
+		db_client = settings.get_databricks_client()
+		extractor = LineageExtractor(db_client)
+
+		if dry_run:
+			sink = ConsoleSink()
+		else:
+			sink = AmbyteSink()
+
+		total_runs = 0
+
+		# 3. Extract & Push
+		for run, event in extractor.extract(lookback_hours=lookback_hours):
+			if sink:
+				sink.push_lineage(run, event)
+
+			total_runs += 1
+			if total_runs % 100 == 0:
+				logger.info(f'Processed {total_runs} lineage events...')
+
+		logger.info(f'Lineage sync complete. Total events: {total_runs}')
+
+	except Exception as e:
+		logger.critical(f'Lineage sync failed: {e}', exc_info=verbose)
+		raise typer.Exit(1) from e
+	finally:
+		if sink:
+			sink.close()
 
 
 if __name__ == '__main__':

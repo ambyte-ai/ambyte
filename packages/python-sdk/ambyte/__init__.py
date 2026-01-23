@@ -4,6 +4,7 @@ from ambyte.client import AmbyteClient
 from ambyte.config import AmbyteMode
 from ambyte.context import context
 from ambyte.decorators import audit, guard
+from ambyte.integrations.databricks import databricks_init
 from ambyte.tracking.lineage import trace
 
 
@@ -23,4 +24,4 @@ def init(api_key: str | None = None, mode: str | None = None):
 	AmbyteClient.get_instance()
 
 
-__all__ = ['AmbyteClient', 'guard', 'audit', 'context', 'trace', 'init']
+__all__ = ['AmbyteClient', 'guard', 'audit', 'context', 'trace', 'init', 'databricks_init']
