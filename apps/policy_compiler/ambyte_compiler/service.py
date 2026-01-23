@@ -255,13 +255,47 @@ class PolicyCompilerService:
 		input_type = str(context.get('input_type', 'STRING'))
 		ref_column = str(context.get('ref_column', 'id'))
 
-		allowed_groups = context.get('allowed_groups', [])
-		if isinstance(allowed_groups, str):
-			allowed_groups = [allowed_groups]
+		# This is typically populated from databricks_mappings.yaml by the caller.
+		group_mapping = context.get('group_mapping', {})
+
+		# Prepare Group Sets
+		allowed_groups_set = set()
+		denied_groups_set = set()
+
+		# 1. Populate from Context overrides (Legacy support / Explicit overrides)
+		ctx_allowed = context.get('allowed_groups', [])
+		if isinstance(ctx_allowed, str):
+			allowed_groups_set.add(ctx_allowed)
+		else:
+			allowed_groups_set.update(ctx_allowed)
+
+		# 2. Resolve Groups from Policy Purposes
+		if policy.purpose:
+			# A. Allowed Purposes -> Allowed Groups
+			for purpose in policy.purpose.allowed_purposes:
+				key = purpose.upper()
+				groups = group_mapping.get(key, [])
+				allowed_groups_set.update(groups)
+
+			# B. Denied Purposes -> Denied Groups
+			for purpose in policy.purpose.denied_purposes:
+				key = purpose.upper()
+				groups = group_mapping.get(key, [])
+				denied_groups_set.update(groups)
+
+		# Convert to sorted lists for deterministic SQL generation
+		allowed_groups = sorted(allowed_groups_set)
+		denied_groups = sorted(denied_groups_set)
+
+		# 3. Retrieve Value Mapping (RLS)
+		# Format: {'US': ['us-group'], 'EU': ['eu-group']}
+		# This is typically passed in via context from resource-level config
+		value_mapping = context.get('value_mapping', {})
 
 		sql_statements = []
 		obs_count = len(policy.contributing_obligation_ids)
 
+		# --- GENERATE MASKING POLICY ---
 		if policy.privacy:
 			pm_val = policy.privacy.method
 			pm_name = pm_val.name if hasattr(pm_val, 'name') else PrivacyMethod(pm_val).name
@@ -269,25 +303,26 @@ class PolicyCompilerService:
 				policy_name=f'ambyte_mask_{policy.resource_urn.split(".")[-1]}',
 				input_type=input_type,
 				method=policy.privacy.method,
-				allowed_groups=allowed_groups,  # type: ignore
+				allowed_groups=allowed_groups,
 				comment=(
 					f'Source: {policy.privacy.reason.winning_source_id}. Method: {pm_name}. Obligations: {obs_count}'
 				),
 			)
 			sql_statements.append(masking_sql)
 
-		if policy.purpose:
-			denied_list = sorted(policy.purpose.denied_purposes)
-			# Databricks Row Filter
+		# --- GENERATE ROW FILTER ---
+		if policy.purpose or policy.geofencing or value_mapping:
+			denied_list = sorted(policy.purpose.denied_purposes) if policy.purpose else []
+
 			row_filter_sql = self.databricks_gen.generate_row_filter_udf(
 				policy_name=f'ambyte_row_filter_{policy.resource_urn.split(".")[-1]}',
 				ref_column=ref_column,
 				input_type=input_type,
-				allowed_groups=allowed_groups,  # type: ignore
-				denied_groups=[],  # TODO: Support Denied Groups from Policy if needed
-				value_mapping={},  # TODO: Support Value Mapping
+				allowed_groups=allowed_groups,
+				denied_groups=denied_groups,
+				value_mapping=value_mapping,
 				comment=(
-					f'Source: {policy.purpose.reason.winning_source_id}. '
+					f'Source: {policy.purpose.reason.winning_source_id if policy.purpose else "Config"}. '
 					f'Denied Purposes: {len(denied_list)}. '
 					f'Obligations: {obs_count}'
 				),
