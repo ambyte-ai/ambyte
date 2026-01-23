@@ -91,6 +91,9 @@ class PolicyEnforcer:
 		if policy.purpose:
 			allowed_groups = self.group_mapper.resolve_groups(list(policy.purpose.allowed_purposes))
 
+		columns = resource.attributes.get('columns', [])
+		table_tags = resource.attributes.get('tags', {})
+
 		# ======================================================================
 		# PART A: ROW FILTERS
 		# ======================================================================
@@ -100,102 +103,169 @@ class PolicyEnforcer:
 			table_hash = hashlib.sha256(full_table_name.encode()).hexdigest()[:8]
 			func_name = f'{settings.GOVERNANCE_CATALOG}.{settings.GOVERNANCE_SCHEMA}.rf_{table_hash}'
 
-			# Determine Ref Column (Default to 'id' or first column if not specified)
-			# In a real impl, we'd use tagging to find the region/tenant column.
-			# For MVP, we assume a column named 'region' exists or fallback to first. # TODO
-			columns = resource.attributes.get('columns', [])
-			ref_col = next((c['name'] for c in columns if c['name'].lower() in ['region', 'country', 'geo']), None)
+			# Find the row filter reference column using tag-based detection
+			ref_col_info = self._find_rls_column(columns, table_tags)
 
-			if not ref_col and columns:
-				# Fallback to first column just to have valid SQL (User must configure proper tags in prod)
-				ref_col = columns[0]['name']
-
-			if ref_col:
-				# 1. Compile UDF
-				ctx = {  # noqa: F841
-					'input_type': 'STRING',  # Simplification: assume region cols are strings # TODO
-					'ref_column': ref_col,
-					'allowed_groups': allowed_groups,
-				}
-
-				# We use the compiler directly to generate the CREATE FUNCTION statement
-				# Pass a dummy target 'databricks' ensures we route to _compile_databricks
-				# BUT we need to specifically extract just the UDF part, not the whole block if multiple policies exist.
-				# The Compiler generates *all* SQL for a resource.
-				# Let's use the generator directly for granular control here.
+			if ref_col_info:
+				ref_col_name = ref_col_info['name']
+				ref_col_type = ref_col_info.get('type', 'STRING')
 
 				assert self.compiler.databricks_gen is not None
 				udf_sql = self.compiler.databricks_gen.generate_row_filter_udf(
 					policy_name=func_name,
-					ref_column=ref_col,
-					input_type='STRING',
+					ref_column=ref_col_name,
+					input_type=ref_col_type,
 					allowed_groups=allowed_groups,
 					comment=f'Ambyte Row Filter for {full_table_name}',
 				)
 
 				self._apply_udf(func_name, udf_sql, dry_run)
 
-				# 2. Bind UDF to Table
-				# Check current state
+				# Bind UDF to Table
 				current_binding = self.state.get_table_binding(full_table_name)
 
-				# If filter not applied OR applied but different function name (version rotation)
 				if not current_binding or current_binding.row_filter_func != func_name:
-					bind_sql = f'ALTER TABLE {full_table_name} SET ROW FILTER {func_name} ON ({ref_col})'
+					bind_sql = f'ALTER TABLE {full_table_name} SET ROW FILTER {func_name} ON ({ref_col_name})'
 					if not dry_run:
 						self.executor.execute(bind_sql)
 						logger.info(f'Applied Row Filter to {full_table_name}')
 					else:
 						logger.info(f'[Dry Run] {bind_sql}')
+			else:
+				logger.warning(
+					f'No suitable RLS column found for {full_table_name}. '
+					'Apply tag "ambyte.row_filter_column" or "governance.rls_key" to enable row filtering.'
+				)
 
 		# ======================================================================
 		# PART B: COLUMN MASKS
 		# ======================================================================
 		if policy.privacy:
-			# Iterate columns to find ones that need masking.
-			# Strategy: Mask columns tagged 'pii' in inventory attributes.
-			columns = resource.attributes.get('columns', [])
+			sensitive_cols = self._find_sensitive_columns(columns)
 
-			for col in columns:
-				# Check if column looks sensitive (naive heuristic for MVP)
-				# In prod, this comes from 'is_pii' flag in Ambyte schema # TODO
+			for col in sensitive_cols:
 				col_name = col['name']
-				is_sensitive = 'email' in col_name.lower() or 'ssn' in col_name.lower() or 'phone' in col_name.lower()
+				col_type = col.get('type', 'STRING')
 
-				if is_sensitive:
-					col_type = col.get('type', 'STRING')
+				# Name: ambyte_mask_<method>_<type_hash> to allow reuse across tables
+				method_slug = policy.privacy.method.name.lower()
+				type_slug = col_type.replace('<', '_').replace('>', '_').replace(',', '_')
+				func_name = f'{settings.GOVERNANCE_CATALOG}.{settings.GOVERNANCE_SCHEMA}.mask_{method_slug}_{type_slug}'
 
-					# 1. Compile UDF
-					# Name: ambyte_mask_<method>_<type_hash> to allow reuse across tables!
-					# Reuse reduces clutter.
-					method_slug = policy.privacy.method.name.lower()
-					type_slug = col_type.replace('<', '_').replace('>', '_').replace(',', '_')
-					func_name = (
-						f'{settings.GOVERNANCE_CATALOG}.{settings.GOVERNANCE_SCHEMA}.mask_{method_slug}_{type_slug}'
-					)
+				assert self.compiler.databricks_gen is not None
+				udf_sql = self.compiler.databricks_gen.generate_masking_udf(
+					policy_name=func_name,
+					input_type=col_type,
+					method=policy.privacy.method,
+					allowed_groups=allowed_groups,
+					comment=f'Ambyte {policy.privacy.method.name} Mask',
+				)
 
-					assert self.compiler.databricks_gen is not None
-					udf_sql = self.compiler.databricks_gen.generate_masking_udf(
-						policy_name=func_name,
-						input_type=col_type,
-						method=policy.privacy.method,
-						allowed_groups=allowed_groups,
-						comment=f'Ambyte {policy.privacy.method.name} Mask',
-					)
+				self._apply_udf(func_name, udf_sql, dry_run)
 
-					self._apply_udf(func_name, udf_sql, dry_run)
+				# Bind UDF
+				current_binding = self.state.get_table_binding(full_table_name)
+				current_mask = current_binding.column_masks.get(col_name) if current_binding else None
 
-					# 2. Bind UDF
-					current_binding = self.state.get_table_binding(full_table_name)
-					current_mask = current_binding.column_masks.get(col_name) if current_binding else None
+				if current_mask != func_name:
+					bind_sql = f'ALTER TABLE {full_table_name} ALTER COLUMN {col_name} SET MASK {func_name}'
+					if not dry_run:
+						self.executor.execute(bind_sql)
+						logger.info(f'Applied Mask to {full_table_name}.{col_name}')
+					else:
+						logger.info(f'[Dry Run] {bind_sql}')
 
-					if current_mask != func_name:
-						bind_sql = f'ALTER TABLE {full_table_name} ALTER COLUMN {col_name} SET MASK {func_name}'
-						if not dry_run:
-							self.executor.execute(bind_sql)
-							logger.info(f'Applied Mask to {full_table_name}.{col_name}')
-						else:
-							logger.info(f'[Dry Run] {bind_sql}')
+	# ==========================================================================
+	# TAG-BASED COLUMN DETECTION
+	# ==========================================================================
+
+	# Standard governance tag keys (should match databricks_mappings.yaml)
+	_TAG_ROW_FILTER_COLUMN = 'ambyte.row_filter_column'
+	_TAG_RLS_KEY = 'governance.rls_key'
+	_TAG_PII_CATEGORY = 'governance.pii_category'
+	_TAG_IS_SENSITIVE = 'governance.is_sensitive'
+
+	# Fallback heuristics when tags are not present
+	_FALLBACK_RLS_COLUMN_NAMES = {'region', 'country', 'geo', 'tenant_id', 'org_id', 'department'}
+	_FALLBACK_PII_PATTERNS = {'email', 'phone', 'ssn', 'social_security', 'credit_card', 'passport'}
+
+	def _find_rls_column(self, columns: list[dict], table_tags: dict[str, str]) -> dict | None:
+		"""
+		Finds the column to use for row-level security filtering.
+
+		Priority:
+		1. Table-level tag 'ambyte.row_filter_column' specifying column name
+		2. Column-level tag 'governance.rls_key' = 'true'
+		3. Heuristic: Column named 'region', 'country', 'geo', etc.
+
+		Returns:
+		    Column dict with 'name' and 'type', or None if not found.
+		"""  # noqa: E101
+		# 1. Check table-level tag for explicit column name
+		if self._TAG_ROW_FILTER_COLUMN in table_tags:
+			rls_col_name = table_tags[self._TAG_ROW_FILTER_COLUMN]
+			for col in columns:
+				if col.get('name') == rls_col_name:
+					logger.debug(f'RLS column from table tag: {rls_col_name}')
+					return col
+			logger.warning(
+				f"Table tag '{self._TAG_ROW_FILTER_COLUMN}' specifies column '{rls_col_name}' "
+				'but column not found in schema.'
+			)
+
+		# 2. Check column-level tags for governance.rls_key = 'true'
+		for col in columns:
+			col_tags = col.get('tags', {})
+			if col_tags.get(self._TAG_RLS_KEY, '').lower() == 'true':
+				logger.debug(f'RLS column from column tag: {col.get("name")}')
+				return col
+
+		# 3. Fallback to heuristic column names
+		for col in columns:
+			col_name = col.get('name', '')
+			if col_name.lower() in self._FALLBACK_RLS_COLUMN_NAMES:
+				logger.debug(f'RLS column from heuristic: {col_name}')
+				return col
+
+		return None
+
+	def _find_sensitive_columns(self, columns: list[dict]) -> list[dict]:
+		"""
+		Finds columns that should be masked based on tags or heuristics.
+
+		Priority:
+		1. Column-level tag 'governance.is_sensitive' = 'true'
+		2. Column-level tag 'governance.pii_category' present
+		3. Heuristic: Column name contains 'email', 'ssn', 'phone', etc.
+
+		Returns:
+		    List of column dicts that should be masked.
+		"""  # noqa: E101
+		sensitive = []
+
+		for col in columns:
+			col_name = col.get('name', '')
+			col_tags = col.get('tags', {})
+
+			# 1. Check is_sensitive tag
+			if col_tags.get(self._TAG_IS_SENSITIVE, '').lower() == 'true':
+				logger.debug(f'Sensitive column from is_sensitive tag: {col_name}')
+				sensitive.append(col)
+				continue
+
+			# 2. Check pii_category tag
+			if self._TAG_PII_CATEGORY in col_tags:
+				logger.debug(f'Sensitive column from pii_category tag: {col_name}')
+				sensitive.append(col)
+				continue
+
+			# 3. Fallback to heuristic name matching
+			col_name_lower = col_name.lower()
+			if any(pattern in col_name_lower for pattern in self._FALLBACK_PII_PATTERNS):
+				logger.debug(f'Sensitive column from heuristic: {col_name}')
+				sensitive.append(col)
+
+		return sensitive
 
 	# Regex to extract content hash from generated SQL comment
 	# Matches: COMMENT 'ambyte:v1:abc123ef | ...'

@@ -59,5 +59,43 @@ default_admin_groups:
   - "metastore_admins" # Unity Catalog admins
   - "ambyte_platform_admin" # Dedicated service principal group for this tool
 
-# Standard Tag Key used for Tag-Based Masking (if applicable)
-standard_pii_tag: "governance.pii_category"
+# ==============================================================================
+# GOVERNANCE TAG KEYS
+# Standard Unity Catalog tags used by Ambyte for policy enforcement.
+# Users should apply these tags to their tables and columns in Databricks.
+# ==============================================================================
+governance_tags:
+  # Table-level tag: Specifies which column to use for row filtering.
+  # Example: ALTER TABLE sales.customers SET TAGS ('ambyte.row_filter_column' = 'region');
+  row_filter_column: "ambyte.row_filter_column"
+
+  # Column-level tag: Marks a column as the RLS (Row-Level Security) key.
+  # Alternative to table-level tag when you want to tag the column directly.
+  # Example: ALTER TABLE sales.customers ALTER COLUMN region SET TAGS ('governance.rls_key' = 'true');
+  rls_key: "governance.rls_key"
+
+  # Column-level tag: PII classification for masking decisions.
+  # Values: 'email', 'phone', 'ssn', 'name', 'address', etc.
+  pii_category: "governance.pii_category"
+
+  # Column-level tag: Indicates column should be masked (boolean).
+  # Example: ALTER TABLE sales.customers ALTER COLUMN email SET TAGS ('governance.is_sensitive' = 'true');
+  is_sensitive: "governance.is_sensitive"
+
+# Heuristic column names (fallback when no tags are present)
+# Used for backward compatibility and MVP scenarios
+fallback_rls_columns:
+  - "region"
+  - "country"
+  - "geo"
+  - "tenant_id"
+  - "org_id"
+  - "department"
+
+fallback_pii_patterns:
+  - "email"
+  - "phone"
+  - "ssn"
+  - "social_security"
+  - "credit_card"
+  - "passport"

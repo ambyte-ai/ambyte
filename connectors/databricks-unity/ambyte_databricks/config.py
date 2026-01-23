@@ -112,7 +112,12 @@ class Settings(BaseSettings):
 
 	INCLUDE_SCHEMAS: Annotated[list[str], BeforeValidator(parse_csv)] = Field(
 		default=['*'],
-		description='List of Schemas to scan. Defaults to all.',
+		description='List of Schemas to scan. Supports glob patterns (e.g., "prod_*", "*_staging"). Defaults to all.',
+	)
+
+	EXCLUDE_SCHEMAS: Annotated[list[str], BeforeValidator(parse_csv)] = Field(
+		default=['information_schema', '__*'],
+		description='List of Schemas to ignore. Supports glob patterns. Defaults to system schemas.',
 	)
 
 	# ==========================================================================

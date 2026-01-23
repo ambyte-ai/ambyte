@@ -34,13 +34,15 @@ class ResourceMapper:
 		columns_meta = []
 		if table.columns:
 			for col in table.columns:
-				columns_meta.append(
-					{
-						'name': col.name,
-						'type': col.type_text,  # e.g. "STRING", "INT", "ARRAY<STRING>"
-						'comment': col.comment,
-					}
-				)
+				col_meta: dict[str, str | None | dict[str, str]] = {
+					'name': col.name,
+					'type': col.type_text,  # e.g. "STRING", "INT", "ARRAY<STRING>"
+					'comment': col.comment,
+				}
+				# Include column-level tags if available
+				if col.name and col.name in asset.column_tags:
+					col_meta['tags'] = asset.column_tags[col.name]
+				columns_meta.append(col_meta)
 
 		# 3. Build Attributes
 		# This generic JSONB dict holds all platform-specific metadata

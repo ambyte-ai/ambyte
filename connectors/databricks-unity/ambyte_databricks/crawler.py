@@ -1,12 +1,13 @@
+import fnmatch
 import logging
+from collections.abc import Generator
 from dataclasses import dataclass, field
-from typing import Generator
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import DatabricksError
 from databricks.sdk.service.catalog import TableInfo, TableType
 
-from .config import settings
+from ambyte_databricks.config import settings
 
 logger = logging.getLogger('ambyte.connector.databricks.crawler')
 
@@ -19,7 +20,8 @@ class DiscoveredAsset:
 	"""
 
 	table_info: TableInfo
-	tags: dict[str, str] = field(default_factory=dict)
+	tags: dict[str, str] = field(default_factory=dict)  # Table-level tags
+	column_tags: dict[str, dict[str, str]] = field(default_factory=dict)  # Column name -> {tag_key: tag_value}
 
 
 class UnityCatalogCrawler:
@@ -70,10 +72,12 @@ class UnityCatalogCrawler:
 					continue
 
 				for table in tables:
-					# Enrich with Tags (Requires separate API call)
+					# Enrich with Tags (Requires separate API calls)
 					# Note: This is an N+1 operation. In high-scale envs, this might be slow.
 					# We catch errors here so one missing permission doesn't stop the crawl.
-					tags = {}
+					table_tags: dict[str, str] = {}
+					column_tags: dict[str, dict[str, str]] = {}
+
 					try:
 						# Only attempt tag fetch for Managed/External tables or Views
 						# Avoid temp views or weird system types if necessary
@@ -82,44 +86,78 @@ class UnityCatalogCrawler:
 							TableType.EXTERNAL,
 							TableType.VIEW,
 						]:
+							# 1. Fetch table-level tags
 							tag_assignments = self.client.entity_tag_assignments.list(
 								entity_type='tables', entity_name=table.full_name
 							)
-							tags = {
+							table_tags = {
 								t.tag_key: t.tag_value for t in tag_assignments if t.tag_key and t.tag_value is not None
 							}
+
+							# 2. Fetch column-level tags
+							if table.columns:
+								for col in table.columns:
+									if not col.name:
+										continue
+									try:
+										# Entity name for columns: catalog.schema.table.column
+										col_full_name = f'{table.full_name}.{col.name}'
+										col_tag_assignments = self.client.entity_tag_assignments.list(
+											entity_type='columns', entity_name=col_full_name
+										)
+										col_tags = {
+											t.tag_key: t.tag_value
+											for t in col_tag_assignments
+											if t.tag_key and t.tag_value is not None
+										}
+										if col_tags:
+											column_tags[col.name] = col_tags
+									except DatabricksError:
+										# Individual column tag fetch might fail
+										pass
+
 					except DatabricksError:
 						# Tags might fail on some view types or permissions
 						pass
 
-					yield DiscoveredAsset(table_info=table, tags=tags)
+					yield DiscoveredAsset(table_info=table, tags=table_tags, column_tags=column_tags)
 
 	def _should_scan_catalog(self, name: str) -> bool:
 		"""
 		Determines if a catalog is in scope based on Settings.
+		Supports glob patterns (e.g., 'prod_*', '*_analytics').
 		"""
-		# 1. Check Exclusions first
-		if name in settings.EXCLUDE_CATALOGS:
+		# 1. Check Exclusions first (supports glob patterns)
+		if self._matches_any_pattern(name, settings.EXCLUDE_CATALOGS):
 			return False
 
-		# 2. Check Inclusions
-		# If "*" is present, allow everything not excluded
-		if '*' in settings.INCLUDE_CATALOGS:
-			return True
-
-		# 3. Exact match
-		return name in settings.INCLUDE_CATALOGS
+		# 2. Check Inclusions (supports glob patterns)
+		return self._matches_any_pattern(name, settings.INCLUDE_CATALOGS)
 
 	def _should_scan_schema(self, name: str) -> bool:
 		"""
 		Determines if a schema is in scope.
-		Usually we skip 'information_schema' unless explicitly requested.
+		Supports glob patterns (e.g., 'prod_*', '*_staging', 'data_*_v2').
 		"""
-		if name == 'information_schema':
+		# 1. Check Exclusions first (supports glob patterns)
+		if self._matches_any_pattern(name, settings.EXCLUDE_SCHEMAS):
 			return False
 
-		# Simple wildcard support for now # TODO
-		if '*' in settings.INCLUDE_SCHEMAS:
-			return True
+		# 2. Check Inclusions (supports glob patterns)
+		return self._matches_any_pattern(name, settings.INCLUDE_SCHEMAS)
 
-		return name in settings.INCLUDE_SCHEMAS
+	def _matches_any_pattern(self, name: str, patterns: list[str]) -> bool:
+		"""
+		Checks if the given name matches any of the glob patterns.
+
+		Supports:
+		- Exact match: 'sales'
+		- Wildcard all: '*'
+		- Prefix match: 'prod_*'
+		- Suffix match: '*_staging'
+		- Complex patterns: 'data_*_v2'
+		"""
+		for pattern in patterns:
+			if fnmatch.fnmatch(name, pattern):
+				return True
+		return False
