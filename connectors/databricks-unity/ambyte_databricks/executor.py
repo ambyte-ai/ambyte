@@ -5,7 +5,7 @@ from typing import Any
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementState
 
-from .config import settings
+from ambyte_databricks.config import settings
 
 logger = logging.getLogger('ambyte.connector.databricks.executor')
 

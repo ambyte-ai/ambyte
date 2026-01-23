@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -6,6 +8,10 @@ from ambyte_schemas.models.obligation import PrivacyMethod
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 logger = logging.getLogger(__name__)
+
+# Increment this when template logic changes in a way that requires re-deployment
+# even if the input parameters haven't changed.
+SCHEMA_VERSION = 1
 
 
 class DatabricksGenerator:
@@ -28,6 +34,22 @@ class DatabricksGenerator:
 			undefined=StrictUndefined,
 		)
 
+	def _compute_content_hash(self, **kwargs: Any) -> str:
+		"""
+		Computes a deterministic hash of the semantic inputs to a UDF.
+
+		This hash is embedded in the SQL COMMENT field and used by the enforcer
+		to detect if an update is needed, avoiding false positives from Databricks
+		reformatting the routine_definition.
+
+		Returns:
+		    A prefixed hash string like 'ambyte:v1:a3f8c2d1'
+		"""  # noqa: E101
+		# Sort keys for determinism, serialize to JSON for consistent representation
+		canonical = json.dumps(kwargs, sort_keys=True, default=str)
+		hash_digest = hashlib.sha256(canonical.encode()).hexdigest()[:8]
+		return f'ambyte:v{SCHEMA_VERSION}:{hash_digest}'
+
 	def generate_masking_udf(
 		self, policy_name: str, input_type: str, method: PrivacyMethod, allowed_groups: list[str], comment: str = ''
 	) -> str:
@@ -42,12 +64,23 @@ class DatabricksGenerator:
 		# Normalize Spark Types (e.g. VARCHAR -> STRING)
 		spark_type = self._normalize_type(input_type)
 
+		# Compute content hash for change detection
+		content_hash = self._compute_content_hash(
+			udf_type='mask',
+			input_type=spark_type,
+			method=method_key,
+			allowed_groups=sorted(allowed_groups),
+		)
+
+		# Prepend hash to user-provided comment
+		full_comment = f'{content_hash} | {comment}' if comment else content_hash
+
 		return template.render(
 			policy_name=policy_name,
 			input_type=spark_type,
 			method=method_key,
 			allowed_groups=allowed_groups,
-			comment=comment,
+			comment=full_comment,
 		)
 
 	def generate_row_filter_udf(
@@ -67,6 +100,25 @@ class DatabricksGenerator:
 
 		spark_type = self._normalize_type(input_type)
 
+		# Normalize inputs for hashing
+		allowed = sorted(allowed_groups or [])
+		denied = sorted(denied_groups or [])
+		# Sort value_mapping keys and their group lists for determinism
+		sorted_mapping = {k: sorted(v) for k, v in sorted((value_mapping or {}).items())}
+
+		# Compute content hash for change detection
+		content_hash = self._compute_content_hash(
+			udf_type='row_filter',
+			ref_column=ref_column,
+			input_type=spark_type,
+			allowed_groups=allowed,
+			denied_groups=denied,
+			value_mapping=sorted_mapping,
+		)
+
+		# Prepend hash to user-provided comment
+		full_comment = f'{content_hash} | {comment}' if comment else content_hash
+
 		return template.render(
 			policy_name=policy_name,
 			ref_column=ref_column,
@@ -74,7 +126,7 @@ class DatabricksGenerator:
 			allowed_groups=allowed_groups or [],
 			denied_groups=denied_groups or [],
 			value_mapping=value_mapping or {},
-			comment=comment,
+			comment=full_comment,
 		)
 
 	def generate_binding_sql(

@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 from pathlib import Path
 
 from ambyte_compiler.service import PolicyCompilerService
@@ -196,24 +197,25 @@ class PolicyEnforcer:
 						else:
 							logger.info(f'[Dry Run] {bind_sql}')
 
+	# Regex to extract content hash from generated SQL comment
+	# Matches: COMMENT 'ambyte:v1:abc123ef | ...'
+	_COMMENT_HASH_PATTERN = re.compile(r"COMMENT\s+'(ambyte:v\d+:[a-f0-9]+)")
+
 	def _apply_udf(self, func_name: str, sql: str, dry_run: bool):
 		"""
 		Idempotent creation of a UDF.
-		Checks if the definition has changed before running ALTER/CREATE.
+		Uses content hash comparison to avoid unnecessary re-deployments.
 		"""
-		existing = self.state.get_function(func_name)
+		# Extract content hash from the generated SQL
+		new_hash = self._extract_content_hash(sql)
 
-		# Calculate hash of new SQL to compare (normalization required)
-		# For MVP, we simply compare the body string or rely on CREATE OR REPLACE
-		# Since Databricks CREATE OR REPLACE is atomic, we can just run it if we suspect changes.
-		# To save compute, we check if existing definition roughly matches. # TODO
-
-		should_update = True
-		if existing:
-			# Databricks stores the body in 'routine_definition'.
-			# Normalization (whitespace) is hard, so we rely on the Comment hash if we stored it previously.
-			# Fallback: Just update it. Governance updates are infrequent enough. # TODO
-			pass
+		if not new_hash:
+			# Fallback: If no hash found in SQL, always update (shouldn't happen with new generator)
+			logger.warning(f'No content hash found in generated SQL for {func_name}, forcing update.')
+			should_update = True
+		else:
+			# Use hash-based comparison to determine if update is needed
+			should_update = self.state.needs_update(func_name, new_hash)
 
 		if should_update:
 			if not dry_run:
@@ -221,3 +223,10 @@ class PolicyEnforcer:
 				logger.info(f'Updated function {func_name}')
 			else:
 				logger.info(f'[Dry Run] Create/Update UDF {func_name}')
+		else:
+			logger.debug(f'Function {func_name} is up-to-date, skipping.')
+
+	def _extract_content_hash(self, sql: str) -> str | None:
+		"""Extracts the Ambyte content hash from the generated SQL's COMMENT clause."""
+		match = self._COMMENT_HASH_PATTERN.search(sql)
+		return match.group(1) if match else None
