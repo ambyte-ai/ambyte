@@ -12,8 +12,8 @@ from ingest_worker.services.job_store import job_store
 logger = logging.getLogger(__name__)
 
 # Constants
-ONTOLOGY_PATH_LOCAL = Path('../../schemas/ontology')  # Relative from apps/ingest_worker
-ONTOLOGY_PATH_DOCKER = Path('/app/schemas/ontology')  # Standard Docker layout
+ONTOLOGY_PATH_LOCAL = Path('../../schemas/ontology/regulations/')  # Relative from apps/ingest_worker
+ONTOLOGY_PATH_DOCKER = Path('/app/schemas/ontology/regulations/')  # Standard Docker layout
 
 
 class RegulationIndexer:
@@ -56,11 +56,7 @@ class RegulationIndexer:
 
 		logger.info(f'Scanning for regulatory mappings in {ontology_dir}...')
 
-		files = [
-			f
-			for f in ontology_dir.glob('*_mappings.yaml')
-			if f.name != 'snowflake_mappings.yaml' and f.name != 'databricks_mappings.yaml'
-		]
+		files = list(ontology_dir.glob('*_mappings.yaml'))
 		if not files:
 			logger.info('No mapping files found.')
 			return

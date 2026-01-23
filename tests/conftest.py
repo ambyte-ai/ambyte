@@ -44,7 +44,7 @@ def policy_library_path(project_root) -> Path:
 
 @pytest.fixture(scope='session')
 def ontology_path(project_root) -> Path:
-	return project_root / 'schemas' / 'ontology'
+	return project_root / 'schemas' / 'ontology' / 'regulations'
 
 
 # ==============================================================================

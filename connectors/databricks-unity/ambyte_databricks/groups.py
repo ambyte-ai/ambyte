@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-DEFAULT_MAPPING_PATH = Path('schemas/ontology/databricks_mappings.yaml')
+DEFAULT_MAPPING_PATH = Path('schemas/platform_mappings/databricks_mappings.yaml')
 
 logger = logging.getLogger('ambyte.connector.databricks.groups')
 
