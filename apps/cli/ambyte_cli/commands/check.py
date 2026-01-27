@@ -83,9 +83,12 @@ def check(
 			# B. Load Resource Metadata (Tags)
 			resource_tags = _load_resource_tags(resource)
 			if resource_tags:
-				console.print(f'[dim]Applied tags from inventory: {resource_tags}[/dim]')
+				console.print(f'[dim]Applied tags from inventory: {resource_tags}[/dim]', emoji=False)
 			else:
-				console.print(f'[dim]No inventory tags found for {resource}. Only matching global (*) policies.[/dim]')
+				console.print(
+					f'[dim]No inventory tags found for {resource}. Only matching global (*) policies.[/dim]',
+					emoji=False,
+				)
 
 			# C. Match Applicable Obligations
 			matcher = ResourceMatcher()
@@ -175,7 +178,8 @@ def _explain_specific_action(policy: ResolvedPolicy, action: str, context: dict[
 	allowed, fail_reason_text = simulator.evaluate(action, 'audit', context)
 
 	console.print(
-		f"\nAnalysis for action [bold cyan]'{action}'[/bold cyan] on [bold cyan]{policy.resource_urn}[/bold cyan]:"
+		f"\nAnalysis for action [bold cyan]'{action}'[/bold cyan] on [bold cyan]{policy.resource_urn}[/bold cyan]:",
+		emoji=False,
 	)
 
 	if allowed:

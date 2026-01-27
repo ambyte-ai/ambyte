@@ -48,15 +48,17 @@ def workspace(tmp_path):
 	)
 
 	# 3. Add Custom Inventory
-	(tmp_path / 'resources.yaml').write_text(
+	(tmp_path / 'resources' / 'resources.yaml').write_text(
 		textwrap.dedent("""
             resources:
               - urn: "urn:snowflake:prod:sales"
+                platform: "snowflake"
                 tags: {env: "prod"}
                 config: 
                   snowflake: {allowed_roles: ["ADMIN"]}
                   
               - urn: "arn:aws:s3:::data-lake"
+                platform: "aws"
                 tags: {env: "prod"}
         """),
 		encoding='utf-8',
@@ -186,10 +188,11 @@ def test_build_iam_target(workspace):
 
 	# 2. Update Inventory to target an IAM Role (Identity Policy) instead of a Bucket
 	# The BucketPolicyGenerator (s3:::) ignores 'denied_regions', but IamPolicyBuilder (role) supports it.
-	(workspace / 'resources.yaml').write_text(
+	(workspace / 'resources' / 'resources.yaml').write_text(
 		textwrap.dedent("""
             resources:
               - urn: "arn:aws:iam::123456789012:role/DataScientist"
+                platform: "aws"
                 tags: {env: "prod"}
         """),
 		encoding='utf-8',
@@ -256,7 +259,7 @@ def test_build_no_inventory_warning(workspace):
 	If inventory is empty, it should warn and use default context.
 	"""
 	# Clear inventory (at root, where loader looks)
-	(workspace / 'resources.yaml').write_text('resources: []')
+	(workspace / 'resources' / 'resources.yaml').write_text('resources: []')
 
 	with mock.patch('shutil.which', return_value=None):
 		result = runner.invoke(app, ['build'])

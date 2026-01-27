@@ -29,15 +29,17 @@ def workspace(tmp_path):
 	runner.invoke(app, ['init', '--yes'])
 
 	# 2. Inventory: Define a tagged resource
-	(tmp_path / 'resources.yaml').write_text(
+	(tmp_path / 'resources' / 'resources.yaml').write_text(
 		textwrap.dedent("""
         resources:
           - urn: "urn:snowflake:sensitive:data"
+            platform: "snowflake"
             tags: 
               sensitivity: "high"
               dept: "finance"
     
           - urn: "urn:s3:public:logs"
+            platform: "aws"
             tags:
               sensitivity: "low"
         """),
@@ -363,7 +365,7 @@ def test_missing_inventory_handling(workspace):
 	If resources.yaml is missing, commands should still work (matching only globals).
 	"""
 	# Delete inventory
-	os.remove(workspace / 'resources.yaml')
+	os.remove(workspace / 'resources' / 'resources.yaml')
 
 	result = runner.invoke(app, ['check', '--resource', 'urn:snowflake:sensitive:data', '--action', 'read'])
 

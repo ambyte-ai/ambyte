@@ -42,15 +42,17 @@ def workspace(tmp_path):
 	policies_dir.mkdir()
 
 	# 3. Setup Inventory (resources.yaml)
-	(tmp_path / 'resources.yaml').write_text(
+	(tmp_path / 'resources' / 'resources.yaml').write_text(
 		textwrap.dedent("""
         resources:
           - urn: "urn:snowflake:prod:sensitive"
+            platform: "snowflake"
             tags: 
               sensitivity: "high"
               env: "prod"
         
           - urn: "urn:s3:logs"
+            platform: "aws"
             tags:
               sensitivity: "low"
         """),

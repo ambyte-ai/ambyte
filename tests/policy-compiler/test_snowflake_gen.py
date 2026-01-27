@@ -63,7 +63,7 @@ def mock_template_dir(tmp_path):
 
 @pytest.fixture
 def generator(mock_template_dir):
-	return SnowflakeGenerator(template_dir=mock_template_dir)
+	return SnowflakeGenerator(template_dir=mock_template_dir / 'snowflake')
 
 
 # ==============================================================================

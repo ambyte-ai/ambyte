@@ -48,6 +48,11 @@ def templates_dir(tmp_path: Path):
 	snowflake_dir.mkdir()
 	p = snowflake_dir / 'masking.sql'
 	p.write_text(sql_content)
+
+	# Create Databricks directory to satisfy PolicyCompilerService init check
+	databricks_dir = d / 'databricks'
+	databricks_dir.mkdir()
+
 	return d
 
 

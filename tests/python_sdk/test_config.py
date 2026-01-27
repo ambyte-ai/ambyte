@@ -17,24 +17,32 @@ def clean_config_state():
 	reset_config()
 
 
-def test_config_defaults():
+def test_config_defaults(tmp_path):
 	"""
 	Verify that the SDK defaults to a safe REMOTE mode configuration
 	if no environment variables are present.
 	"""
 	# Ensure no AMBYTE vars exist
 	with mock.patch.dict(os.environ, {}, clear=True):
-		config = get_config()
+		# Switch to a temp directory to avoid picking up a local .env file
+		old_cwd = os.getcwd()
+		os.chdir(tmp_path)
+		try:
+			# Reset config to ensure AmbyteSettings re-instantiates in the new CWD
+			reset_config()
+			config = get_config()
 
-		assert config.mode == AmbyteMode.REMOTE
-		assert str(config.control_plane_url) == 'http://localhost:8000/'
-		assert config.fail_open is True
-		assert config.api_key is None
-		assert config.service_name == 'unknown-service'
+			assert config.mode == AmbyteMode.REMOTE
+			assert str(config.control_plane_url) == 'http://localhost:8000/'
+			assert config.fail_open is True
+			assert config.api_key is None
+			assert config.service_name == 'unknown-service'
 
-		# Check derived properties
-		assert config.is_remote is True
-		assert config.is_enabled is True
+			# Check derived properties
+			assert config.is_remote is True
+			assert config.is_enabled is True
+		finally:
+			os.chdir(old_cwd)
 
 
 def test_load_from_env_vars():

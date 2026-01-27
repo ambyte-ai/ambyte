@@ -21,7 +21,7 @@ def test_check_permission_allow():
 
 	# Create a transport that returns static JSON
 	def handler(request):
-		return httpx.Response(200, json={'result': 'ALLOW'})
+		return httpx.Response(200, json={'allowed': True})
 
 	client = AmbyteClient()
 	# Swap the internal client transport
@@ -37,7 +37,7 @@ def test_check_permission_deny():
 	"""
 
 	def handler(request):
-		return httpx.Response(200, json={'result': 'DENY'})
+		return httpx.Response(200, json={'allowed': False})
 
 	client = AmbyteClient()
 	client._client = httpx.Client(transport=httpx.MockTransport(handler), base_url='http://test')
@@ -58,7 +58,7 @@ def test_retry_on_server_error(monkeypatch):
 		call_count += 1
 		if call_count < 3:
 			return httpx.Response(500)
-		return httpx.Response(200, json={'result': 'ALLOW'})
+		return httpx.Response(200, json={'allowed': True})
 
 	client = AmbyteClient()
 	# We must patch the client inside the wrapper because tenacity wraps the method
@@ -125,7 +125,7 @@ async def test_async_check_permission():
 	"""
 
 	def handler(request):
-		return httpx.Response(200, json={'result': 'ALLOW'})
+		return httpx.Response(200, json={'allowed': True})
 
 	client = AmbyteClient()
 	client._async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url='http://test')

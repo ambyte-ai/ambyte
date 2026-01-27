@@ -83,18 +83,19 @@ def test_load_nonexistent_file(no_credentials):
 	assert mgr.load() is None
 
 
-def test_load_invalid_yaml(mock_credentials_path):
+def test_load_invalid_yaml(no_credentials):
 	"""Should return None and log warning if YAML is corrupt."""
-	creds_file = mock_credentials_path / 'credentials'
+	creds_file = no_credentials
 	creds_file.write_text("default: { api_key: 'unclosed quote", encoding='utf-8')
 
 	mgr = CredentialsManager()
 	assert mgr.load() is None
 
 
-def test_load_schema_mismatch(mock_credentials_path):
+def test_load_schema_mismatch(no_credentials):
 	"""Should return None if required fields are missing."""
-	creds_file = mock_credentials_path / 'credentials'
+
+	creds_file = no_credentials
 	# Missing api_key
 	creds_file.write_text("default: { project_id: '123' }", encoding='utf-8')
 

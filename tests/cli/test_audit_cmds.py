@@ -194,7 +194,7 @@ def test_list_logs_success(mock_client):
 			'id': 'uuid-1',
 			'timestamp': '2025-01-01T12:00:00',
 			'decision': 'ALLOW',
-			'actor': {'id': 'alice'},
+			'actor_id': 'alice',
 			'action': 'read',
 			'block_id': 'sealed-block-id',  # Sealed
 		},
@@ -202,7 +202,7 @@ def test_list_logs_success(mock_client):
 			'id': 'uuid-2',
 			'timestamp': '2025-01-01T12:05:00',
 			'decision': 'DENY',
-			'actor': {'id': 'bob'},
+			'actor_id': 'bob',
 			'action': 'write',
 			'block_id': None,  # Buffered
 		},

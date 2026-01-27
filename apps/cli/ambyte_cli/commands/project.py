@@ -47,6 +47,7 @@ SAMPLE_RESOURCES_YAML = """# Ambyte Resource Inventory
 
 resources:
   - urn: "urn:snowflake:prod:sales:customers"
+    platform: "snowflake"
     description: "Primary customer table in Snowflake"
     tags:
       domain: "sales"
@@ -54,6 +55,7 @@ resources:
       contains_pii: "true"
 
   - urn: "urn:s3:data-lake:logs"
+    platform: "aws"
     description: "App logs bucket"
     tags:
       domain: "engineering"
