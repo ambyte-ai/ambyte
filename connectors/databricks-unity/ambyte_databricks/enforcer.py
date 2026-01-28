@@ -6,6 +6,7 @@ from pathlib import Path
 from ambyte_compiler.service import PolicyCompilerService
 from ambyte_schemas.models.artifact import PolicyBundle
 from ambyte_schemas.models.inventory import ResourceCreate
+from ambyte_schemas.models.obligation import PrivacyMethod
 
 from ambyte_databricks.config import settings
 from ambyte_databricks.executor import SqlExecutor
@@ -145,8 +146,11 @@ class PolicyEnforcer:
 				col_name = col['name']
 				col_type = col.get('type', 'STRING')
 
+				pm_val = policy.privacy.method
+				pm_name = pm_val.name if hasattr(pm_val, 'name') else PrivacyMethod(pm_val).name
+
 				# Name: ambyte_mask_<method>_<type_hash> to allow reuse across tables
-				method_slug = policy.privacy.method.name.lower()
+				method_slug = pm_name.lower()
 				type_slug = col_type.replace('<', '_').replace('>', '_').replace(',', '_')
 				func_name = f'{settings.GOVERNANCE_CATALOG}.{settings.GOVERNANCE_SCHEMA}.mask_{method_slug}_{type_slug}'
 
@@ -154,9 +158,9 @@ class PolicyEnforcer:
 				udf_sql = self.compiler.databricks_gen.generate_masking_udf(
 					policy_name=func_name,
 					input_type=col_type,
-					method=policy.privacy.method,
+					method=pm_val,
 					allowed_groups=allowed_groups,
-					comment=f'Ambyte {policy.privacy.method.name} Mask',
+					comment=f'Ambyte {pm_name} Mask',
 				)
 
 				self._apply_udf(func_name, udf_sql, dry_run)
