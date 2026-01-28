@@ -1,5 +1,8 @@
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -23,6 +26,19 @@ from ambyte_schemas.models.obligation import (
 	RetentionRule,
 	RetentionTrigger,
 	SourceProvenance,
+)
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.catalog import CatalogInfo, ColumnInfo, ColumnTypeName, SchemaInfo, TableInfo, TableType
+from databricks.sdk.service.sql import (
+	ColumnInfo as SqlColumnInfo,
+)
+from databricks.sdk.service.sql import (
+	ResultData,
+	ResultManifest,
+	ResultSchema,
+	StatementResponse,
+	StatementState,
+	StatementStatus,
 )
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -225,3 +241,148 @@ def no_credentials(mock_credentials_path, monkeypatch):
 
 	monkeypatch.setattr(auth_svc, 'CREDENTIALS_FILE', creds_file)
 	return creds_file
+
+
+@pytest.fixture(autouse=True)
+def mock_env_vars():
+	"""
+	Sets up valid environment variables for all tests to prevent
+	Settings validation errors on import or instantiation.
+	"""
+	env_vars = {
+		'AMBYTE_DATABRICKS_HOST': 'https://test.databricks.com',
+		'AMBYTE_DATABRICKS_TOKEN': 'dapi_test_token',
+		'AMBYTE_DATABRICKS_WAREHOUSE_ID': 'wh_123456789',
+		'AMBYTE_API_KEY': 'sk_test_mock_key',
+		'AMBYTE_DATABRICKS_CONTROL_PLANE_URL': 'http://mock-api.ambyte.local',
+		'AMBYTE_DATABRICKS_LOCAL_MODE': 'false',
+		# Explicitly set defaults to ensure deterministic behavior
+		'AMBYTE_DATABRICKS_GOVERNANCE_CATALOG': 'main',
+		'AMBYTE_DATABRICKS_GOVERNANCE_SCHEMA': 'ambyte_gov',
+	}
+	with patch.dict(os.environ, env_vars):
+		# We need to reload config if it was already imported,
+		# or we patch the singleton in the test files.
+		# Ideally, we patch the settings object instance.
+		from ambyte_databricks import config
+
+		# Force re-validation/loading if needed, though Pydantic BaseSettings
+		# usually loads once. We can manually update the singleton for tests.
+		config.settings = config.Settings()
+		yield
+
+
+# ==============================================================================
+# DATABRICKS CLIENT MOCK
+# ==============================================================================
+
+
+@pytest.fixture
+def mock_db_client():
+	"""
+	Returns a mocked Databricks WorkspaceClient.
+	Wraps all sub-services used by the connector.
+	"""
+	client = MagicMock(spec=WorkspaceClient)
+
+	# Mock Sub-services
+	client.catalogs = MagicMock()
+	client.schemas = MagicMock()
+	client.tables = MagicMock()
+	client.functions = MagicMock()
+	client.statement_execution = MagicMock()
+	client.entity_tag_assignments = MagicMock()
+
+	return client
+
+
+# ==============================================================================
+# FACTORY HELPERS
+# ==============================================================================
+
+
+@pytest.fixture
+def make_catalog():
+	def _make(name: str):
+		return CatalogInfo(name=name)
+
+	return _make
+
+
+@pytest.fixture
+def make_schema():
+	def _make(name: str, catalog_name: str):
+		return SchemaInfo(name=name, catalog_name=catalog_name)
+
+	return _make
+
+
+@pytest.fixture
+def make_table():
+	def _make(
+		name: str,
+		schema: str,
+		catalog: str,
+		columns: list[dict[str, str]] | None = None,
+		table_type: TableType = TableType.MANAGED,
+	):
+		full_name = f'{catalog}.{schema}.{name}'
+
+		cols = []
+		if columns:
+			for c in columns:
+				cols.append(
+					ColumnInfo(
+						name=c.get('name'),
+						type_text=c.get('type', 'STRING'),
+						type_name=ColumnTypeName.STRING,  # Simplified
+						position=0,
+					)
+				)
+
+		return TableInfo(
+			name=name,
+			catalog_name=catalog,
+			schema_name=schema,
+			full_name=full_name,
+			table_type=table_type,
+			columns=cols,
+			owner='test_owner',
+			storage_location=f's3://bucket/{name}',
+			created_at=123456789,
+			updated_at=123456789,
+		)
+
+	return _make
+
+
+@pytest.fixture
+def mock_sql_response():
+	"""
+	Helper to generate a successful SQL execution response structure.
+	"""
+
+	def _make(
+		statement_id: str = 'stmt_123',
+		state: StatementState = StatementState.SUCCEEDED,
+		data: list[list[Any]] | None = None,
+		columns: list[str] | None = None,
+	):
+		# 1. Manifest / Schema
+		manifest = None
+		if columns:
+			cols = [SqlColumnInfo(name=c, position=i) for i, c in enumerate(columns)]
+			manifest = ResultManifest(schema=ResultSchema(columns=cols))
+
+		# 2. Result Data
+		result = None
+		if data is not None:
+			# Databricks returns data as string arrays usually
+			str_data = [[str(item) for item in row] for row in data]
+			result = ResultData(chunk_index=0, row_count=len(data), data_array=str_data)
+
+		return StatementResponse(
+			statement_id=statement_id, status=StatementStatus(state=state), manifest=manifest, result=result
+		)
+
+	return _make
