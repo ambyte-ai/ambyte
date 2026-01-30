@@ -307,14 +307,139 @@ def test_retention_invalid_type_fail_open(evaluator):
 # ==============================================================================
 
 
-def test_privacy_passthrough(evaluator):
-	"""Privacy rules are currently advisory/passthrough in the SDK."""
+def test_privacy_unspecified_passthrough(evaluator):
+	"""When privacy method is UNSPECIFIED, no restrictions are applied."""
+	priv = EffectivePrivacy(method=PrivacyMethod.UNSPECIFIED, reason=make_trace())
+
+	# Internal check
+	allowed, reason = evaluator._check_privacy(priv, {'output_format': 'raw'})
+	assert allowed is True
+	assert 'No specific privacy method required' in reason
+
+
+def test_privacy_no_output_format_delegated(evaluator):
+	"""When privacy is required but no output format is requested, delegate to downstream."""
 	priv = EffectivePrivacy(method=PrivacyMethod.ANONYMIZATION, reason=make_trace())
 	policy = make_policy(privacy=priv)
 
 	allowed, reason = evaluator.evaluate(policy, 'read', {})
 	assert allowed is True
 	assert reason == 'Access Allowed'
+
+
+def test_privacy_blocks_raw_format(evaluator):
+	"""When privacy is required and 'raw' format is requested, block access."""
+	priv = EffectivePrivacy(method=PrivacyMethod.ANONYMIZATION, reason=make_trace())
+	policy = make_policy(privacy=priv)
+
+	allowed, reason = evaluator.evaluate(policy, 'read', {'output_format': 'raw'})
+	assert allowed is False
+	assert 'Access Denied' in reason
+	assert 'raw' in reason
+
+
+def test_privacy_blocks_cleartext_format(evaluator):
+	"""When privacy is required and 'cleartext' format is requested, block access."""
+	priv = EffectivePrivacy(method=PrivacyMethod.PSEUDONYMIZATION, reason=make_trace())
+	policy = make_policy(privacy=priv)
+
+	allowed, reason = evaluator.evaluate(policy, 'read', {'output_format': 'cleartext'})
+	assert allowed is False
+	assert 'Access Denied' in reason
+	assert 'cleartext' in reason
+
+
+def test_privacy_blocks_unmasked_format(evaluator):
+	"""When privacy is required and 'unmasked' format is requested, block access."""
+	priv = EffectivePrivacy(method=PrivacyMethod.PSEUDONYMIZATION, reason=make_trace())
+
+	# Internal check
+	allowed, reason = evaluator._check_privacy(priv, {'output_format': 'unmasked'})
+	assert allowed is False
+	assert 'unmasked' in reason
+
+
+def test_privacy_blocks_decrypt_format(evaluator):
+	"""When privacy is required and 'decrypt' format is requested, block access."""
+	priv = EffectivePrivacy(method=PrivacyMethod.ANONYMIZATION, reason=make_trace())
+
+	# Internal check
+	allowed, reason = evaluator._check_privacy(priv, {'output_format': 'decrypt'})
+	assert allowed is False
+	assert 'decrypt' in reason
+
+
+def test_privacy_allows_non_cleartext_format(evaluator):
+	"""When privacy is required but a safe output format is requested, allow."""
+	priv = EffectivePrivacy(method=PrivacyMethod.ANONYMIZATION, reason=make_trace())
+	policy = make_policy(privacy=priv)
+
+	allowed, reason = evaluator.evaluate(policy, 'read', {'output_format': 'masked'})
+	assert allowed is True
+	assert reason == 'Access Allowed'
+
+
+def test_privacy_context_key_mode(evaluator):
+	"""Privacy check should find format using 'mode' context key."""
+	priv = EffectivePrivacy(method=PrivacyMethod.PSEUDONYMIZATION, reason=make_trace())
+
+	# Internal check with 'mode' key
+	allowed, reason = evaluator._check_privacy(priv, {'mode': 'raw'})
+	assert allowed is False
+	assert 'raw' in reason
+
+
+def test_privacy_context_key_format(evaluator):
+	"""Privacy check should find format using 'format' context key."""
+	priv = EffectivePrivacy(method=PrivacyMethod.ANONYMIZATION, reason=make_trace())
+
+	# Internal check with 'format' key
+	allowed, reason = evaluator._check_privacy(priv, {'format': 'cleartext'})
+	assert allowed is False
+	assert 'cleartext' in reason
+
+
+def test_privacy_case_insensitive_format(evaluator):
+	"""Privacy check should handle format values case-insensitively."""
+	priv = EffectivePrivacy(method=PrivacyMethod.PSEUDONYMIZATION, reason=make_trace())
+
+	# Internal check with uppercase
+	allowed, reason = evaluator._check_privacy(priv, {'output_format': 'RAW'})
+	assert allowed is False
+	assert 'raw' in reason
+
+	# With mixed case
+	allowed2, reason2 = evaluator._check_privacy(priv, {'output_format': 'ClearText'})
+	assert allowed2 is False
+	assert 'cleartext' in reason2
+
+
+def test_privacy_whitespace_handling(evaluator):
+	"""Privacy check should handle format values with extra whitespace."""
+	priv = EffectivePrivacy(method=PrivacyMethod.PSEUDONYMIZATION, reason=make_trace())
+
+	# Internal check with whitespace
+	allowed, reason = evaluator._check_privacy(priv, {'output_format': '  raw  '})
+	assert allowed is False
+	assert 'raw' in reason
+
+
+def test_privacy_integration_short_circuit(evaluator):
+	"""Ensure privacy check integrates correctly in evaluation order."""
+	# Create a policy with both retention (valid) and privacy (blocks raw)
+	ret = EffectiveRetention(duration=timedelta(days=30), trigger=RetentionTrigger.CREATION_DATE, reason=make_trace())
+	priv = EffectivePrivacy(method=PrivacyMethod.ANONYMIZATION, reason=make_trace())
+
+	policy = make_policy(retention=ret, privacy=priv)
+
+	# Context that passes retention but fails privacy
+	past = datetime.now(timezone.utc) - timedelta(days=1)
+	ctx = {'created_at': past.isoformat(), 'output_format': 'raw'}
+
+	allowed, reason = evaluator.evaluate(policy, 'read', ctx)
+	assert allowed is False
+	assert 'Access Denied' in reason
+	assert 'raw' in reason
 
 
 # ==============================================================================

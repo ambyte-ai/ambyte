@@ -5,10 +5,12 @@ from typing import Any
 from ambyte_rules.models import (
 	EffectiveAiRules,
 	EffectiveGeofencing,
+	EffectivePrivacy,
 	EffectivePurpose,
 	EffectiveRetention,
 	ResolvedPolicy,
 )
+from ambyte_schemas.models.obligation import PrivacyMethod
 
 logger = logging.getLogger('ambyte.core.evaluator')
 
@@ -54,10 +56,10 @@ class LocalPolicyEvaluator:
 				return False, reason
 
 		# 5. Check Privacy (Transformation)
-		# Privacy rules (e.g. "Must Anonymize") usually don't block access outright
-		# unless the system knows it cannot apply the masking.
-		# For the SDK Guard, we assume downstream systems handle masking, so we Pass.
-		# Future: Check if context['output_format'] == 'raw' and deny. # TODO
+		if policy.privacy:
+			allowed, reason = self._check_privacy(policy.privacy, context)
+			if not allowed:
+				return False, reason
 
 		return True, 'Access Allowed'
 
@@ -177,6 +179,31 @@ class LocalPolicyEvaluator:
 			return True, 'Skipped (Error)'
 
 		return True, 'Retention valid'
+
+	def _check_privacy(self, rule: EffectivePrivacy, context: dict) -> tuple[bool, str]:
+		"""
+		Validates privacy transformation requirements (Masking/Anonymization).
+
+		Logic:
+		1. If the policy requires privacy (Method != UNSPECIFIED)...
+		2. AND the user explicitly requests 'raw' or 'unmasked' output format...
+		3. THEN Block access.
+
+		Otherwise, ALLOW (assuming the downstream system handles the masking).
+		"""
+		if rule.method == PrivacyMethod.UNSPECIFIED:
+			return True, 'No specific privacy method required.'
+
+		requested_format = self._get_context_val(context, ['output_format', 'mode', 'format'])
+
+		if requested_format:
+			fmt = str(requested_format).lower().strip()
+			# Block explicit requests for cleartext on protected resources
+			if fmt in ['raw', 'cleartext', 'unmasked', 'decrypt']:
+				method_name = rule.method.name if hasattr(rule.method, 'name') else str(rule.method)
+				return False, f"Access Denied: Policy requires '{method_name}', but '{fmt}' output was requested."
+
+		return True, 'Allowed (Transformation delegated to downstream).'
 
 	def _get_context_val(self, context: dict, keys: list[str]) -> Any | None:
 		"""Helper to find a value using multiple potential key names (case-insensitive)."""
