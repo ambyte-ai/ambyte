@@ -1,5 +1,5 @@
 import logging
-import time
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
@@ -260,28 +260,35 @@ class AmbyteClient:
 
 	def log_access(self, resource_urn: str, action: str, allowed: bool, actor_id: str | None = None):
 		"""
-		Fire-and-forget audit log.
-		In a real implementation, this should push to a background queue
-		to avoid blocking the main thread. For MVP, we send simple HTTP. # TODO
+		Log an access attempt for audit purposes.
+		Defaults to using a background thread for batching unless configured otherwise.
 		"""
 		if self.settings.mode == AmbyteMode.OFF:
 			return
 
 		payload = {
-			'timestamp': time.time(),
+			'timestamp': datetime.now(timezone.utc).isoformat(),
 			'resource_urn': resource_urn,
 			'action': action,
-			'allowed': allowed,
+			'decision': 'ALLOW' if allowed else 'DENY',
 			'actor_id': actor_id or 'anonymous',
 		}
 
-		# MVP: Fire synchronous call inside a try/except to never crash execution
-		# Future: Move to BackgroundTask or Producer/Consumer Queue # TODO
-		try:
-			self._client.post('/v1/audit/', json=payload)
-		except Exception as e:
-			# Never fail an application because logging failed
-			logger.warning(f'Failed to emit audit log: {e}')  # pylint: disable=logging-fstring-interpolation
+		if self.settings.enable_background_sync:
+			try:
+				from ambyte.tracking.manager import get_tracker
+
+				get_tracker().enqueue('audit', payload)
+			except Exception as e:
+				logger.warning(f'Failed to enqueue audit log: {e}')  # pylint: disable=logging-fstring-interpolation
+		else:
+			# Synchronous Fallback
+			batch_payload = {'logs': [payload]}
+			try:
+				self._client.post('/v1/audit/', json=batch_payload)
+			except Exception as e:
+				# Never fail an application because logging failed
+				logger.warning(f'Failed to emit audit log: {e}')  # pylint: disable=logging-fstring-interpolation
 
 
 # Helper for external usage
