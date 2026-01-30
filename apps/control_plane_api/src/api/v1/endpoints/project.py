@@ -2,11 +2,12 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import get_current_user, get_current_user_project
 from src.core import security
+from src.core.cache import cache
 from src.db.models.auth import ApiKey, User
 from src.db.models.tenancy import Project
 from src.db.session import get_db
@@ -146,3 +147,21 @@ async def list_projects(
 	stmt = select(Project).where(Project.organization_id == user.organization_id)
 	result = await db.execute(stmt)
 	return result.scalars().all()
+
+
+@router.head('/{project_id}/status', summary='Get Policy Version Hash')
+async def get_policy_version(
+	project_id: UUID,
+	response: Response,
+	project: Annotated[Project, Depends(get_current_user_project)],
+):
+	"""
+	Returns the current policy version hash in the X-Ambyte-Policy-Version header.
+	Useful for clients to efficiently check if policies have changed.
+	"""
+	version = await cache.client.get(f'project_policy_version:{project.id}')
+	if version:
+		response.headers['X-Ambyte-Policy-Version'] = version
+	else:
+		response.headers['X-Ambyte-Policy-Version'] = ''
+	return Response(status_code=status.HTTP_200_OK)

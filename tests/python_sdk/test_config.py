@@ -56,6 +56,7 @@ def test_load_from_env_vars():
 		'AMBYTE_FAIL_OPEN': 'false',
 		'AMBYTE_SERVICE_NAME': 'payment-service',
 		'AMBYTE_DECISION_CACHE_TTL_SECONDS': '300',
+		'AMBYTE_POLICY_POLL_INTERVAL': '30.0',
 	}
 
 	with mock.patch.dict(os.environ, env_vars):
@@ -67,6 +68,7 @@ def test_load_from_env_vars():
 		assert config.fail_open is False
 		assert config.service_name == 'payment-service'
 		assert config.decision_cache_ttl_seconds == 300
+		assert config.policy_poll_interval == 30.0
 
 		# Derived properties
 		assert config.is_remote is False  # Because mode is LOCAL

@@ -6,6 +6,7 @@ from ambyte.client import get_client
 from ambyte.config import AmbyteMode, get_config
 from ambyte.context import get_current_actor, get_current_run_id, get_extra_context
 from ambyte.core.evaluator import LocalPolicyEvaluator
+from ambyte.core.watcher import PolicyWatcher
 from ambyte_rules.models import ResolvedPolicy
 from ambyte_schemas.models.artifact import PolicyBundle
 from cachetools import TTLCache
@@ -32,16 +33,20 @@ class DecisionEngine:
 		# Initialize Cache
 		# Keys are hashes of (urn, action, actor_id, frozen_context)
 		# Values are booleans (True=Allow, False=Deny)
-		# TODO: push "Invalidate" signals (via Redis/Websockets) to the SDK so policy changes take effect instantly
-		# rather than waiting for the TTL to expire.
 		self._cache = TTLCache(maxsize=10000, ttl=self.config.decision_cache_ttl_seconds)
 
 		# Local Policy State (for LOCAL mode)
 		self._local_policies: dict[str, ResolvedPolicy] = {}
 		self.evaluator = LocalPolicyEvaluator()
 
+		# Policy Watcher (for REMOTE mode)
+		self._watcher: PolicyWatcher | None = None
+
 		if self.config.mode == AmbyteMode.LOCAL:
 			self._load_local_policy()
+		elif self.config.mode == AmbyteMode.REMOTE:
+			self._watcher = PolicyWatcher(self)
+			self._watcher.start()
 
 	@classmethod
 	def get_instance(cls) -> 'DecisionEngine':
@@ -79,6 +84,11 @@ class DecisionEngine:
 		# 4. Update Cache & Return
 		self._cache[cache_key] = is_allowed
 		return is_allowed
+
+	def invalidate_cache(self):
+		"""Clear the decision cache. Called by PolicyWatcher on version change."""
+		self._cache.clear()
+		logger.info('Decision cache invalidated')
 
 	async def check_access_async(self, resource_urn: str, action: str, context: dict[str, Any] | None = None) -> bool:
 		"""

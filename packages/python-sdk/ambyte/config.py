@@ -86,6 +86,10 @@ class AmbyteSettings(BaseSettings):
 		default=5.0,
 		description='How often (in seconds) the background worker flushes logs.',
 	)
+	policy_poll_interval: float = Field(
+		default=10.0,
+		description='How often (in seconds) the SDK polls for policy version changes.',
+	)
 
 	# ==========================================================================
 	# Local Mode Specifics

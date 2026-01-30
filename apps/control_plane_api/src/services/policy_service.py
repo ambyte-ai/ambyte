@@ -1,7 +1,7 @@
 import hashlib
 import json
 import logging
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ambyte_schemas.models.obligation import Obligation as PydanticObligation
 from sqlalchemy import func, select, update
@@ -145,6 +145,10 @@ class PolicyService:
 
 			# Invalidate Caches for this project
 			await cache.delete_pattern(f'decision:{project_id}:*')
+
+			# Update the policy version key for this project
+			await cache.client.set(f'project_policy_version:{project_id}', str(uuid4()))
+
 			logger.info(f'Sync complete for project {project_id}. Delta: {len(summary_report)} items.')
 		else:
 			logger.info(f'Dry run simulation for project {project_id}. No changes committed.')
