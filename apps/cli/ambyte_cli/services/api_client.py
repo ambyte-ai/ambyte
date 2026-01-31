@@ -165,6 +165,43 @@ class CloudApiClient:
 			console.print('[error]Network Error:[/error] Failed to fetch audit logs.')
 			raise
 
+	def list_inventory(
+		self,
+		page: int = 1,
+		size: int = 50,
+		platform: str | None = None,
+		urn_filter: str | None = None,
+	) -> dict:
+		"""
+		Fetches paginated inventory from the Control Plane.
+
+		Args:
+			page: Page number (1-indexed)
+			size: Number of items per page (max 100)
+			platform: Optional filter by platform type
+			urn_filter: Optional URN pattern filter (substring match)
+		Returns:
+			A dict with pagination info and items:
+			{items: [...], total: int, page: int, size: int, pages: int}
+		"""
+		params: dict[str, int | str] = {'page': page, 'size': size}
+		if platform:
+			params['platform'] = platform
+		if urn_filter:
+			params['urn'] = urn_filter
+
+		try:
+			response = self._client.get('/v1/resources/', params=params)
+			response.raise_for_status()
+			return response.json()
+
+		except httpx.HTTPStatusError as e:
+			self._handle_http_error(e)
+			raise
+		except httpx.RequestError:
+			console.print('[error]Network Error:[/error] Failed to fetch inventory.')
+			raise
+
 	def close(self):
 		"""Cleanly close the connection pool."""
 		self._client.close()

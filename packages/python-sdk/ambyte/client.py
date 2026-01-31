@@ -194,6 +194,58 @@ class AmbyteClient:
 			self._handle_connection_error(e)
 			return []
 
+	def list_inventory_page(self, page: int = 1, size: int = 100) -> dict[str, Any]:
+		"""
+		Fetch a single page of inventory resources.
+		Returns the raw PaginatedResponse dict (items, total, page, pages).
+		"""
+		params = {'page': page, 'size': size}
+		try:
+			response = self._client.get('/v1/resources/', params=params)
+			response.raise_for_status()
+			return response.json()
+		except httpx.HTTPError as e:
+			# Re-use existing error handling
+			self._handle_connection_error(e)
+			return {'items': [], 'total': 0, 'page': page, 'size': size, 'pages': 0}
+
+	def iter_inventory(self, batch_size: int = 100):
+		"""
+		Generator that yields resources one by one, handling pagination automatically.
+		Useful for iterating over large catalogs without loading everything into RAM.
+
+		Usage:
+			for resource in client.iter_inventory():
+				print(resource['urn'])
+		"""
+		current_page = 1
+		while True:
+			data = self.list_inventory_page(page=current_page, size=batch_size)
+			items = data.get('items', [])
+
+			if not items:
+				break
+
+			for item in items:
+				yield item
+
+			# Check if we have reached the last page
+			total_pages = data.get('pages', 0)
+			if current_page >= total_pages:
+				break
+
+			current_page += 1
+
+	async def list_inventory_page_async(self, page: int = 1, size: int = 100) -> dict[str, Any]:
+		params = {'page': page, 'size': size}
+		try:
+			response = await self._async_client.get('/v1/resources/', params=params)
+			response.raise_for_status()
+			return response.json()
+		except httpx.HTTPError as e:
+			self._handle_connection_error(e)
+			return {'items': [], 'total': 0, 'page': page, 'size': size, 'pages': 0}
+
 	# ==========================================================================
 	# PERMISSION CHECKS (SYNC)
 	# ==========================================================================

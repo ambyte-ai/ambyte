@@ -68,6 +68,7 @@ audit_app.command(name='list')(audit.list_logs)
 inventory_app = typer.Typer(help='Manage data resources and inventory tags.')
 app.add_typer(inventory_app, name='inventory')
 inventory_app.command(name='sync')(inventory.sync_inventory)
+inventory_app.command(name='list')(inventory.list_inventory)
 
 
 # 4. Global Callbacks & Configuration
