@@ -1,6 +1,8 @@
+from math import ceil
 from uuid import UUID
 
-from ambyte_schemas.models.inventory import ResourceCreate
+from ambyte_schemas.models.common import PaginatedResponse
+from ambyte_schemas.models.inventory import ResourceCreate, ResourceResponse
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,12 +65,40 @@ class InventoryService:
 		return list(result.scalars().all())
 
 	@staticmethod
-	async def get_all(db: AsyncSession, project_id: UUID) -> list[ResourceModel]:
+	async def get_all(
+		db: AsyncSession, project_id: UUID, page: int = 1, size: int = 50
+	) -> PaginatedResponse[ResourceResponse]:
 		"""
-		List all resources for a project.
-		TODO: Add pagination for large inventories.
+		List all resources for a project with pagination.
 		"""
-		stmt = select(ResourceModel).where(ResourceModel.project_id == project_id).order_by(ResourceModel.urn)
+		if page < 1:
+			page = 1
+		if size > 100:
+			size = 100
 
-		result = await db.execute(stmt)
-		return list(result.scalars().all())
+		# 1. Base Query
+		stmt = select(ResourceModel).where(ResourceModel.project_id == project_id)
+
+		# 2. Total Count
+		count_stmt = select(func.count()).select_from(stmt.subquery())
+		total = (await db.execute(count_stmt)).scalar_one()
+
+		# 3. Data Query
+		# Apply ordering, limit, offset
+		data_stmt = stmt.order_by(ResourceModel.urn).limit(size).offset((page - 1) * size)
+		result = await db.execute(data_stmt)
+		orm_items = result.scalars().all()
+
+		# 4. Map to Pydantic
+		items = [ResourceResponse.model_validate(item) for item in orm_items]
+
+		# 5. Calculate pages
+		pages = ceil(total / size) if size > 0 else 0
+
+		return PaginatedResponse(
+			items=items,
+			total=total,
+			page=page,
+			size=size,
+			pages=pages,
+		)

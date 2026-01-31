@@ -1,10 +1,11 @@
 from typing import Annotated
 
+from ambyte_schemas.models.common import PaginatedResponse
 from ambyte_schemas.models.inventory import (
 	BatchResourceCreate,
 	ResourceResponse,
 )
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import VerifyScope, get_current_project
 from src.db.models.tenancy import Project
@@ -38,14 +39,16 @@ async def sync_inventory(
 @router.get(
 	'/',
 	summary='List Inventory',
-	response_model=list[ResourceResponse],
+	response_model=PaginatedResponse[ResourceResponse],
 	dependencies=[Depends(VerifyScope('resource:write'))],  # Write scope usually implies Read
 )
 async def list_resources(
 	project: Annotated[Project, Depends(get_current_project)],
 	db: Annotated[AsyncSession, Depends(get_db)],
+	page: int = Query(1, ge=1, description='Page number'),
+	size: int = Query(50, ge=1, le=100, description='Items per page'),
 ):
 	"""
 	Return all registered resources for the project.
 	"""
-	return await InventoryService.get_all(db, project.id)
+	return await InventoryService.get_all(db, project.id, page=page, size=size)

@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import Any, cast
+from typing import Any, Generic, TypeVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,6 +13,25 @@ class AmbyteBaseModel(BaseModel):
 	"""
 
 	model_config = ConfigDict(from_attributes=True, use_enum_values=True)
+
+
+# ==============================================================================
+# Generics & Pagination
+# ==============================================================================
+
+T = TypeVar('T')
+
+
+class PaginatedResponse(AmbyteBaseModel, Generic[T]):
+	"""
+	Standard envelope for paginated API responses.
+	"""
+
+	items: list[T]
+	total: int = Field(..., description='Total number of items matching the query.')
+	page: int = Field(..., description='Current page number (1-indexed).')
+	size: int = Field(..., description='Number of items per page.')
+	pages: int = Field(..., description='Total number of pages available.')
 
 
 # ==============================================================================
