@@ -16,12 +16,11 @@ logger = logging.getLogger(__name__)
 class AuditRepository:
 	"""
 	Async persistence layer for Audit Logs.
-	Buffers processed logs in memory and bulk-inserts them to Postgres.
+	Stateless insert operations for high-throughput batching.
 	"""
 
 	def __init__(self):
 		self.engine: AsyncEngine | None = None
-		self._buffer: list[dict] = []
 
 	async def connect(self):
 		"""Initialize DB connection pool."""
@@ -38,15 +37,13 @@ class AuditRepository:
 		if self.engine:
 			await self.engine.dispose()
 
-	def add(self, project_id: str, log: AuditLogEntry):
+	@staticmethod
+	def map_to_db_row(project_id: str, log: AuditLogEntry) -> dict:
 		"""
-		Add a processed log entry to the local buffer.
+		Convert Pydantic model to flat DB dictionary.
 		"""
-		# Convert Pydantic model to flat DB dictionary
-		# Note: We must serialize nested JSONB fields (reason_trace, request_context)
-		# using model_dump() to ensure they are compatible with JSONB columns.
 		decision_name = Decision(log.decision).name
-		row = {
+		return {
 			'id': log.id,
 			'project_id': UUID(project_id),
 			'timestamp': log.timestamp,
@@ -58,19 +55,14 @@ class AuditRepository:
 			'request_context': log.request_context,
 			'entry_hash': log.entry_hash,
 		}
-		self._buffer.append(row)
 
-	async def flush(self) -> int:
+	async def insert_batch(self, entries: list[dict]) -> int:
 		"""
-		Commit the buffer to the database.
+		Commit a batch of rows to the database.
 		Returns: Number of rows inserted.
 		"""
-		if not self._buffer:
+		if not entries:
 			return 0
-
-		count = len(self._buffer)
-		entries = self._buffer[:]  # Snapshot
-		self._buffer.clear()  # Reset immediately
 
 		assert self.engine is not None, 'DB connection not initialized'
 		try:
@@ -84,16 +76,10 @@ class AuditRepository:
 
 				await conn.execute(stmt)
 
-			logger.info(f'Flushed {count} logs to Postgres.')
-			return count
+			logger.info(f'Flushed {len(entries)} logs to Postgres.')
+			return len(entries)
 
 		except Exception as e:
-			# Critical failure: If DB is down, we lose the buffer?
-			# In a robust system, we might push back to a Dead Letter Queue or retry.
-			# For now, we log error and re-raise so the worker can crash/restart. TODO
+			# Critical failure: If DB is down, the caller must handle retry/crash.
 			logger.error(f'Failed to flush audit batch: {e}')
 			raise e
-
-	@property
-	def buffer_size(self) -> int:
-		return len(self._buffer)
