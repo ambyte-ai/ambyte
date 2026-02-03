@@ -36,6 +36,8 @@ class QueueMessage:
 # ==============================================================================
 # Global Components
 # ==============================================================================
+# decode_responses=False is critical because we handle raw bytes in the Sealer
+# and Consumer for maximum performance and correct stream parsing.
 redis_client = from_url(settings.REDIS_URL, encoding='utf-8', decode_responses=False)
 consumer = StreamConsumer(redis_client)
 repository = AuditRepository()
@@ -129,7 +131,7 @@ async def writer_worker():
 					# Fetch next item with timeout
 					item = await asyncio.wait_for(audit_queue.get(), timeout=timeout)
 					batch.append(item)
-				except asyncio.TimeoutError:
+				except TimeoutError:
 					break  # Timeout reached, flush what we have
 
 			# --- B. Flush Logic ---
@@ -177,47 +179,52 @@ async def lifespan(app: FastAPI):
 	producer_task = asyncio.create_task(consume_from_redis())
 	consumer_task = asyncio.create_task(writer_worker())
 
-	# Start the Sealer (Runs independently)
+	# Start the Distributed Sealer (Runs independently)
 	sealer_task = asyncio.create_task(sealer.start())
 
 	yield
 
 	# Shutdown
 	logger.info('Audit Worker shutting down...')
-	consumer.stop()
-	sealer.stop()
 
-	# 1. Stop Producer (Stop reading new data)
+	# 1. Stop Ingest Sources
+	consumer.stop()
 	producer_task.cancel()
 	try:
 		await producer_task
 	except asyncio.CancelledError:
 		pass
 
-	# 2. Wait for Queue to drain (Best effort flush)
-	# We give the writer a few seconds to flush remaining items in memory
+	# 2. Drain Internal Queue (Best effort flush)
 	if not audit_queue.empty():
 		logger.info(f'Draining {audit_queue.qsize()} items from queue...')
 		try:
-			# Wait for queue to be empty (all items processed & task_done called)
 			await asyncio.wait_for(audit_queue.join(), timeout=5.0)
-		except asyncio.TimeoutError:
-			logger.warning('Timed out waiting for queue to drain. Some buffered logs may be re-processed on restart.')
+		except TimeoutError:
+			logger.warning('Timed out waiting for queue to drain. Buffer may be re-processed on restart.')
 
-	# 3. Stop Consumer
+	# 3. Stop Ingest Writer
 	consumer_task.cancel()
 	try:
 		await consumer_task
 	except asyncio.CancelledError:
 		pass
 
-	# 4. Stop Sealer
-	sealer_task.cancel()
+	# 4. Graceful Sealer Shutdown
+	# We call stop() first to allow the Leader to release locks and Workers to finish current blocks.
+	sealer.stop()
 	try:
-		await sealer_task
-	except asyncio.CancelledError:
-		pass
+		# Give it 5 seconds to cleanup
+		await asyncio.wait_for(sealer_task, timeout=5.0)
+	except (TimeoutError, asyncio.CancelledError):
+		logger.warning('Forcing Sealer shutdown...')
+		sealer_task.cancel()
+		try:
+			await sealer_task
+		except asyncio.CancelledError:
+			pass
 
+	# 5. Cleanup Resources
 	await redis_client.aclose()
 	await repository.close()
 
