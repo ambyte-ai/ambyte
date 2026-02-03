@@ -24,6 +24,8 @@ class MerkleTree:
 		# We perform an initial sort of the leaves to ensure the tree structure
 		# is deterministic regardless of the insertion order in the database batch.
 		self.leaves = sorted(leaves)
+		# Optimization: Map hash to index for O(1) lookup during proof generation
+		self.leaf_to_index = {h: i for i, h in enumerate(self.leaves)}
 		self.levels: list[list[str]] = []
 		self.root: str = ''
 
@@ -91,45 +93,31 @@ class MerkleTree:
 		    A list of sibling hashes required to reconstruct the root.
 		    Returns empty list if target_hash is not in the tree.
 		"""  # noqa: E101
-		if target_hash not in self.leaves:
+		# 1. Fast Lookup: Find index of the leaf
+		idx = self.leaf_to_index.get(target_hash)
+		if idx is None:
 			return []
 
 		proof = []
-		current_hash = target_hash
 
-		# Traverse up the tree levels (excluding the root level)
-		for level_idx, level in enumerate(self.levels[:-1]):
-			try:
-				# Find where we are in the current level
-				# Note: In production systems with massive trees, we'd optimize this lookup.
-				# For batch sizes < 10k, linear index lookup is negligible. # TODO
-				idx = level.index(current_hash)
-			except ValueError:
-				return []
-
-			# Identify the sibling
-			# If we are even (0), sibling is Right (1).
-			# If we are odd (1), sibling is Left (0).
-			is_even_index = idx % 2 == 0
-
-			if is_even_index:
-				sibling_idx = idx + 1
-			else:
-				sibling_idx = idx - 1
+		# 2. Traverse up the tree levels (excluding the root level)
+		for level in self.levels[:-1]:
+			# Identify the sibling index using XOR
+			# If idx is even (0), sibling is Right (1) -> 0^1 = 1
+			# If idx is odd (1), sibling is Left (0)  -> 1^1 = 0
+			sibling_idx = idx ^ 1
 
 			# Handle the odd-node-at-end case
 			if sibling_idx < len(level):
 				sibling_hash = level[sibling_idx]
 			else:
 				# If we are the last odd node, we were paired with ourselves
-				sibling_hash = current_hash
+				sibling_hash = level[idx]
 
 			proof.append(sibling_hash)
 
-			# Move up to the parent
-			# The parent of index i is at index i // 2 in the next level
-			parent_idx = idx // 2
-			current_hash = self.levels[level_idx + 1][parent_idx]
+			# Move up to the parent index (integer division by 2)
+			idx //= 2
 
 		return proof
 
