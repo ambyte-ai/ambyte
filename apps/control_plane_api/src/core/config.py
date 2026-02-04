@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 	# CLERK CONFIGURATION
 	# Found in Clerk Dashboard -> API Keys -> Issuer
 	# e.g., "https://clerk.ambyte.ai" or "https://humble-foal-12.clerk.accounts.dev"
-	CLERK_ISSUER: str = 'https://quiet-slug-97.clerk.accounts.dev'
+	CLERK_ISSUER: str
 
 	# Expected Audience (usually empty for standard Clerk setups, but good practice to check)
 	CLERK_AUDIENCE: str | None = None
