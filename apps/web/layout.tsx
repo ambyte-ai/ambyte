@@ -3,23 +3,23 @@ import { dark } from "@clerk/themes";
 import "./globals.css";
 
 export default function RootLayout({
-    children,
+	children,
 }: {
-    children: React.ReactNode;
+	children: React.ReactNode;
 }) {
-    return (
-        <ClerkProvider
-            afterSignOutUrl="/sign-in"
-            appearance={{
-                baseTheme: dark,
-                variables: { colorPrimary: "#0ea5e9" }, // Cyan-500 (Ambyte Brand)
-            }}
-        >
-            <html lang="en" className="dark">
-                <body className="bg-background text-foreground min-h-screen">
-                    {children}
-                </body>
-            </html>
-        </ClerkProvider>
-    );
+	return (
+		<ClerkProvider
+			afterSignOutUrl="/sign-in"
+			appearance={{
+				baseTheme: dark,
+				variables: { colorPrimary: "#0ea5e9" }, // Cyan-500 (Ambyte Brand)
+			}}
+		>
+			<html lang="en" className="dark">
+				<body className="bg-background text-foreground min-h-screen">
+					{children}
+				</body>
+			</html>
+		</ClerkProvider>
+	);
 }
