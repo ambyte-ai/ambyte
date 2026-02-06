@@ -39,3 +39,20 @@ class ResourceResponse(ResourceCreate):
 	updated_at: datetime
 
 	model_config = ConfigDict(from_attributes=True)
+
+
+class ResourceRiskSummary(BaseModel):
+	"""
+	Simplified resource view for the Risk Dashboard widget.
+	"""
+
+	urn: str
+	name: str | None = None
+	platform: str
+	sensitivity: str = 'UNSPECIFIED'
+	risk_level: str = 'UNSPECIFIED'
+
+	# Optional: Who owns this risky asset?
+	owner: str | None = None
+
+	model_config = ConfigDict(from_attributes=True)

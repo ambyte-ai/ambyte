@@ -12,8 +12,7 @@ export interface DashboardKPI {
 	enforcement_rate_24h: number;
 	active_obligations: number;
 	protected_resources: number;
-	// Note: pending_ingestions isn't in backend yet, handled via separate logic or future update
-	// TODO: Add pending_ingestions
+	pending_ingestions: number;
 }
 
 export interface TrafficPoint {

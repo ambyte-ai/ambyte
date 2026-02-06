@@ -11,6 +11,7 @@ class DashboardKPI(BaseModel):
 	enforcement_rate_24h: float = Field(..., description='Percentage of allowed requests (0-100)')
 	active_obligations: int
 	protected_resources: int
+	pending_ingestions: int = Field(0, description='Number of PDF documents currently being processed.')
 
 
 class TrafficPoint(BaseModel):

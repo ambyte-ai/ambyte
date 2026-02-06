@@ -4,6 +4,7 @@ from ambyte_schemas.models.common import PaginatedResponse
 from ambyte_schemas.models.inventory import (
 	BatchResourceCreate,
 	ResourceResponse,
+	ResourceRiskSummary,
 )
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,21 @@ from src.db.session import get_db
 from src.services.inventory_service import InventoryService
 
 router = APIRouter()
+
+
+@router.get(
+	'/risks',
+	summary='Get High Risk Resources',
+	description='Returns a list of resources classified as Confidential/Restricted or High Risk.',
+	response_model=list[ResourceRiskSummary],
+	dependencies=[Depends(VerifyScope('resource:write'))],  # Using read scope implies write usually, or adjust scopes
+)
+async def get_risk_resources(
+	project: Annotated[Project, Depends(get_current_project)],
+	db: Annotated[AsyncSession, Depends(get_db)],
+	limit: int = Query(10, ge=1, le=50),
+):
+	return await InventoryService.get_high_risk_resources(db, project.id, limit=limit)
 
 
 @router.put(

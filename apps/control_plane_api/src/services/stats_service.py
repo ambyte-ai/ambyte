@@ -1,9 +1,11 @@
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.core.cache import cache
 from src.db.models.audit import AuditLog
 from src.db.models.inventory import Resource
 from src.db.models.policy import Obligation
@@ -34,6 +36,28 @@ class StatsService:
 		stmt_res = select(func.count(Resource.id)).where(Resource.project_id == project_id)
 		protected_resources = (await db.execute(stmt_res)).scalar() or 0
 
+		# Calculate Pending Ingestions from Redis
+		# We scan keys created by the ingest-worker: 'ambyte:jobs:*'
+		pending_ingestions = 0
+		try:
+			if cache.client:
+				# Use scan_iter for safe iteration over keys
+				# Note: In a high-scale production env, we would maintain a separate Redis Set of active job IDs TODO
+				# to avoid scanning, but scanning with match is acceptable for the 24h TTL used by job_store.
+				async for key in cache.client.scan_iter(match='ambyte:jobs:*'):
+					raw_val = await cache.client.get(key)
+					if raw_val:
+						try:
+							job_data = json.loads(raw_val)
+							status = job_data.get('status', '')
+							# Check if job is still active (Not COMPLETED or FAILED)
+							if status and status not in ['COMPLETED', 'FAILED']:
+								pending_ingestions += 1
+						except (json.JSONDecodeError, TypeError):
+							continue
+		except Exception as e:
+			logger.warning(f'Failed to calculate pending ingestions: {e}')
+			# Fail open with 0 to not break dashboard
 		# ----------------------------------------------------------------------
 		# 2. Traffic Metrics (Last 24h)
 		# ----------------------------------------------------------------------
@@ -59,6 +83,7 @@ class StatsService:
 			enforcement_rate_24h=round(enforcement_rate, 1),
 			active_obligations=active_obligations,
 			protected_resources=protected_resources,
+			pending_ingestions=pending_ingestions,
 		)
 
 		# ----------------------------------------------------------------------

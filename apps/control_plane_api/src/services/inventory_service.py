@@ -2,8 +2,8 @@ from math import ceil
 from uuid import UUID
 
 from ambyte_schemas.models.common import PaginatedResponse
-from ambyte_schemas.models.inventory import ResourceCreate, ResourceResponse
-from sqlalchemy import func, select
+from ambyte_schemas.models.inventory import ResourceCreate, ResourceResponse, ResourceRiskSummary
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.cache import cache
@@ -102,3 +102,64 @@ class InventoryService:
 			size=size,
 			pages=pages,
 		)
+
+	@staticmethod
+	async def get_high_risk_resources(db: AsyncSession, project_id: UUID, limit: int = 10) -> list[ResourceRiskSummary]:
+		"""
+		Retrieves resources flagged as High Sensitivity or High Risk.
+		Queries the JSONB attributes column.
+		"""
+		# We look for resources where:
+		# sensitivity is CONFIDENTIAL(3) or RESTRICTED(4)
+		# OR risk_level is HIGH(3) or UNACCEPTABLE(4)
+		# Note: We handle both string and integer representations for robustness.
+
+		stmt = (
+			select(ResourceModel)
+			.where(ResourceModel.project_id == project_id)
+			.where(
+				or_(
+					# Check Sensitivity (Strings or Ints)
+					func.jsonb_extract_path_text(ResourceModel.attributes, 'sensitivity').in_(
+						['CONFIDENTIAL', 'RESTRICTED', '3', '4']
+					),
+					# Check Risk Level
+					func.jsonb_extract_path_text(ResourceModel.attributes, 'risk_level').in_(
+						['HIGH', 'UNACCEPTABLE', '3', '4']
+					),
+					# Check specific governance tags
+					func.jsonb_extract_path_text(ResourceModel.attributes, 'tags', 'sensitivity').in_(
+						['high', 'restricted']
+					),
+				)
+			)
+			.limit(limit)
+		)
+
+		result = await db.execute(stmt)
+		orm_items = result.scalars().all()
+
+		summary_list = []
+		for res in orm_items:
+			attrs = res.attributes or {}
+
+			# Normalize values for display
+			sens = str(attrs.get('sensitivity', 'UNSPECIFIED')).upper()
+			risk = str(attrs.get('risk_level', 'UNSPECIFIED')).upper()
+
+			# Fallback to tags if top-level attributes aren't set
+			if sens == 'UNSPECIFIED':
+				sens = str(attrs.get('tags', {}).get('sensitivity', 'UNSPECIFIED')).upper()
+
+			summary_list.append(
+				ResourceRiskSummary(
+					urn=res.urn,
+					name=res.name or res.urn.split(':')[-1],
+					platform=res.platform,
+					sensitivity=sens,
+					risk_level=risk,
+					owner=attrs.get('owner'),
+				)
+			)
+
+		return summary_list
