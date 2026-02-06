@@ -1,6 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
-import "./globals.css";
+import "./global.css";
 
 export default function RootLayout({
 	children,

@@ -2,19 +2,19 @@
 
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { ChevronDown, FolderKanban } from "lucide-react";
-import { useProject } from "@/context/project-context";
+import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import { useProject } from "@/context/project-context";
 
 export function Header() {
 	const { projects, projectId, setProjectId, isLoading } = useProject();
 
-	const activeProject = projects.find(p => p.id === projectId);
+	const activeProject = projects.find((p) => p.id === projectId);
 
 	return (
 		<header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -37,10 +37,17 @@ export function Header() {
 				{/* Project Switcher (Custom) */}
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="outline" className="h-9 gap-2 justify-between min-w-[200px]">
+						<Button
+							variant="outline"
+							className="h-9 gap-2 justify-between min-w-[200px]"
+						>
 							<div className="flex items-center gap-2">
 								<FolderKanban className="h-4 w-4 text-muted-foreground" />
-								<span>{isLoading ? "Loading..." : activeProject?.name || "Select Project"}</span>
+								<span>
+									{isLoading
+										? "Loading..."
+										: activeProject?.name || "Select Project"}
+								</span>
 							</div>
 							<ChevronDown className="h-3 w-3 opacity-50" />
 						</Button>

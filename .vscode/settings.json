@@ -1,14 +1,18 @@
 {
-    "[python]": {
-      "editor.formatOnSave": true,
-      "editor.defaultFormatter": "charliermarsh.ruff"
-    },
-    "[proto3]": {
-        "editor.formatOnSave": true,
-        "editor.defaultFormatter": "zxh404.vscode-proto3"
-    },
-    "[rego]": {
-      "editor.formatOnSave": true,
-      "editor.defaultFormatter": "tsandall.opa"
-    }
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "[proto3]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "zxh404.vscode-proto3"
+  },
+  "[rego]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "tsandall.opa"
+  },
+  "css.lint.unknownAtRules": "ignore",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
 }
