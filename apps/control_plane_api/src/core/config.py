@@ -1,3 +1,4 @@
+import json
 import secrets
 from typing import Annotated, Any, Literal
 
@@ -12,11 +13,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 def parse_cors(v: Any) -> list[str] | str:
 	"""
-	Parses a comma-separated string of origins into a list.
+	Parses a comma-separated string or JSON array of origins into a list.
 	"""
-	if isinstance(v, str) and not v.startswith('['):
-		return [i.strip() for i in v.split(',')]
-	elif isinstance(v, list | str):
+	if isinstance(v, str):
+		if v.startswith('['):
+			# JSON array format: '["http://localhost:3000"]'
+			return json.loads(v)
+		else:
+			# Comma-separated format: 'http://localhost:3000,http://example.com'
+			return [i.strip() for i in v.split(',')]
+	elif isinstance(v, list):
 		return v
 	raise ValueError(v)
 

@@ -6,8 +6,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from src.api.deps import get_current_user
 from src.core import security
-from src.db.models.auth import ApiKey, User
+from src.db.models.auth import ApiKey
 from src.db.models.membership import ProjectMembership
 from src.db.models.tenancy import Project
 from src.db.session import get_db
@@ -59,6 +60,7 @@ async def who_am_i(
 			),
 			organization_id=org.id,
 			organization_name=org.name,
+			is_personal=org.external_id is None,
 			# API Keys are scoped to a single project, so we return just that one
 			projects=[ProjectBrief(id=project.id, name=project.name, role='machine_admin')],
 		)
@@ -66,39 +68,17 @@ async def who_am_i(
 	# PATH B: JWT (Human)
 	# ==========================================================================
 
-	# 1. Verify Signature
-	payload = await security.verify_clerk_token(token)
-	if not payload:
-		raise HTTPException(
-			status_code=status.HTTP_401_UNAUTHORIZED,
-			detail='Invalid or expired token',
-			headers={'WWW-Authenticate': 'Bearer'},
-		)
+	# We delegate to the dependency. This triggers the JIT logic in deps.py
+	# which creates the User, Org, and Default Project if they don't exist.
+	current_user = await get_current_user(token_creds, db)
 
-	external_id = payload.get('sub')
-	if not external_id:
-		raise HTTPException(status_code=401, detail='Token missing subject')
-
-	# 2. Lookup User
-	query = select(User).where(User.external_id == external_id).options(selectinload(User.organization))
-	result = await db.execute(query)
-	current_user = result.scalars().first()
-
-	if not current_user:
-		# Note: Full JIT provisioning logic (creating new users) is handled
-		# by the browser flow or deps.get_current_user.
-		# For CLI usage, we assume the user exists.
-		raise HTTPException(status_code=401, detail='User not found in this organization')
-
+	# Now that we have the user (newly created or existing), fetch their projects
 	if current_user.is_superuser:
-		# Superusers have access to all projects in the organization
 		stmt = select(Project).where(Project.organization_id == current_user.organization_id).order_by(Project.name)
 		result = await db.execute(stmt)
 		projects = result.scalars().all()
-		# Superusers get 'admin' role on all projects (virtual role)
 		projects_with_roles = [ProjectBrief(id=p.id, name=p.name, role='admin') for p in projects]
 	else:
-		# Regular users only see projects where they have membership
 		stmt = (
 			select(ProjectMembership)
 			.options(selectinload(ProjectMembership.project))
@@ -109,7 +89,6 @@ async def who_am_i(
 		memberships = result.scalars().all()
 		projects_with_roles = [ProjectBrief(id=m.project.id, name=m.project.name, role=m.role) for m in memberships]
 
-	# Build the structured response
 	return WhoAmIResponse(
 		user=UserRead(
 			id=current_user.id,
@@ -119,5 +98,6 @@ async def who_am_i(
 		),
 		organization_id=UUID(current_user.organization_id),
 		organization_name=current_user.organization.name,
+		is_personal=(current_user.organization.external_id is None),
 		projects=projects_with_roles,
 	)
