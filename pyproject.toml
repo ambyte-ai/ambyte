@@ -26,7 +26,11 @@ dependencies = [
 [tool.uv.workspace]
 # Define the directories that contain your apps and packages.
 members = [
-    "apps/*",
+    "apps/audit-log",
+    "apps/control_plane_api",
+    "apps/cli",
+    "apps/policy_compiler",
+    "apps/ingest_worker",
     "packages/python-sdk",
     "packages/rules-engine",
     # CONNECTORS - Do NOT use wildcard here because of Go code
