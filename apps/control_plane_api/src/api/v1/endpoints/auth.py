@@ -96,7 +96,7 @@ async def who_am_i(
 			full_name=current_user.full_name,
 			is_superuser=current_user.is_superuser,
 		),
-		organization_id=UUID(current_user.organization_id),
+		organization_id=UUID(str(current_user.organization_id)),
 		organization_name=current_user.organization.name,
 		is_personal=(current_user.organization.external_id is None),
 		projects=projects_with_roles,

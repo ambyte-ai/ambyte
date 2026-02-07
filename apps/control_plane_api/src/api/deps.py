@@ -243,6 +243,10 @@ async def get_current_user(
 	await db.commit()
 	await db.refresh(new_user)
 
+	# Manually populate the relationship to avoid MissingGreenlet error (lazy load in async)
+	# unnecessary DB roundtrip since we already have the object
+	new_user.organization = target_org
+
 	return new_user
 
 
