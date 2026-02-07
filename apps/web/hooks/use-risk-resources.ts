@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import { useProject } from "@/context/project-context";
-import { useAmbyteApi } from "@/hooks/use-ambyte-api";
+import { useProjectApi } from "@/hooks/use-project-api";
 
 export interface ResourceRiskItem {
     urn: string;
@@ -13,19 +13,15 @@ export interface ResourceRiskItem {
 
 export function useRiskResources(limit: number = 10) {
     const { projectId } = useProject();
-    const api = useAmbyteApi();
+    const api = useProjectApi();
 
     const key = projectId ? [`/resources/risks`, projectId, limit] : null;
 
     const fetcher = async () => {
         if (!projectId) return [];
 
-        // Pass project context via header as required by backend stats endpoint
-        return api(`/resources/risks?limit=${limit}`, {
-            headers: {
-                "X-Ambyte-Project-Id": projectId,
-            },
-        });
+        // Project ID header is automatically injected by useProjectApi
+        return api(`/resources/risks?limit=${limit}`);
     };
 
     const { data, error, isLoading, mutate } = useSWR<ResourceRiskItem[]>(

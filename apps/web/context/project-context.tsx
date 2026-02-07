@@ -1,7 +1,8 @@
 "use client";
 
 import type React from "react";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useOrganization } from "@clerk/nextjs";
 import { useAmbyteApi } from "@/hooks/use-ambyte-api";
 
 // -----------------------------------------------------------------------------
@@ -43,6 +44,7 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
 	const api = useAmbyteApi();
+	const { organization: clerkOrg } = useOrganization();
 
 	// State
 	const [projectId, setProjectId] = useState<string | null>(null);
@@ -52,6 +54,37 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
+
+	// Track previous orgId to detect changes
+	const prevOrgIdRef = useRef<string | null | undefined>(undefined);
+
+	// Listen for Clerk org changes
+	useEffect(() => {
+		const currentOrgId = clerkOrg?.id ?? null;
+
+		// Skip the first render (when prevOrgIdRef is undefined)
+		if (prevOrgIdRef.current === undefined) {
+			prevOrgIdRef.current = currentOrgId;
+			return;
+		}
+
+		// If orgId has changed, clear state and refresh
+		if (prevOrgIdRef.current !== currentOrgId) {
+			prevOrgIdRef.current = currentOrgId;
+
+			// 1. Clear projects immediately
+			setProjects([]);
+
+			// 2. Set projectId to null to prevent data leakage
+			setProjectId(null);
+
+			// 3. Trigger refresh to fetch new org's projects
+			refreshContext();
+		}
+	}, [clerkOrg?.id]);
+
+	// Helper to get org-scoped localStorage key
+	const getStorageKey = (orgId: string) => `ambyte_project_${orgId}`;
 
 	// Initial Load & Refresh Logic
 	const refreshContext = async () => {
@@ -63,9 +96,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 			const data = await api("/auth/whoami");
 
 			// 1. Set Org Info
-			setOrganizationId(data.organization_id);
+			const currentOrgId = data.organization_id;
+			setOrganizationId(currentOrgId);
 			setOrganization({
-				id: data.organization_id,
+				id: currentOrgId,
 				name: data.organization_name,
 			});
 
@@ -73,8 +107,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 			setProjects(data.projects || []);
 
 			// 3. Determine Active Project
-			// Priority: LocalStorage -> First Available -> None
-			const savedId = localStorage.getItem("ambyte_project_id");
+			// Priority: LocalStorage (org-scoped) -> First Available -> None
+			const storageKey = getStorageKey(currentOrgId);
+			const savedId = localStorage.getItem(storageKey);
 			const isValidSaved = data.projects.find((p: Project) => p.id === savedId);
 
 			if (isValidSaved) {
@@ -82,7 +117,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 			} else if (data.projects.length > 0) {
 				const defaultId = data.projects[0].id;
 				setProjectId(defaultId);
-				localStorage.setItem("ambyte_project_id", defaultId);
+				localStorage.setItem(storageKey, defaultId);
 			} else {
 				setProjectId(null);
 			}
@@ -104,9 +139,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 	// Handle manual project switching
 	const handleSetProject = (id: string) => {
 		// Validate it exists in our list
-		if (projects.find((p) => p.id === id)) {
+		if (projects.find((p) => p.id === id) && organizationId) {
 			setProjectId(id);
-			localStorage.setItem("ambyte_project_id", id);
+			localStorage.setItem(getStorageKey(organizationId), id);
 		}
 	};
 

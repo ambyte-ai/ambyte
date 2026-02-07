@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
-import { ChevronDown, FolderKanban } from "lucide-react";
+import { ChevronDown, FolderKanban, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useProject } from "@/context/project-context";
@@ -15,6 +17,7 @@ export function Header() {
 	const { projects, projectId, setProjectId, isLoading } = useProject();
 
 	const activeProject = projects.find((p) => p.id === projectId);
+	const hasProjects = projects.length > 0;
 
 	return (
 		<header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -39,14 +42,18 @@ export function Header() {
 					<DropdownMenuTrigger asChild>
 						<Button
 							variant="outline"
-							className="h-9 gap-2 justify-between min-w-[200px]"
+							className={`h-9 gap-2 justify-between min-w-[200px] ${!hasProjects && !isLoading
+									? "border-dashed text-muted-foreground"
+									: ""
+								}`}
+							disabled={isLoading}
 						>
 							<div className="flex items-center gap-2">
 								<FolderKanban className="h-4 w-4 text-muted-foreground" />
 								<span>
 									{isLoading
 										? "Loading..."
-										: activeProject?.name || "Select Project"}
+										: activeProject?.name || (hasProjects ? "Select Project" : "No Projects")}
 								</span>
 							</div>
 							<ChevronDown className="h-3 w-3 opacity-50" />
@@ -62,11 +69,21 @@ export function Header() {
 								{p.name}
 							</DropdownMenuItem>
 						))}
-						{projects.length === 0 && !isLoading && (
+						{!hasProjects && (
 							<div className="p-2 text-xs text-muted-foreground text-center">
-								No projects found
+								No projects in this organization
 							</div>
 						)}
+						{hasProjects && <DropdownMenuSeparator />}
+						<DropdownMenuItem asChild>
+							<Link
+								href="/projects/new"
+								className="flex items-center gap-2 cursor-pointer"
+							>
+								<Plus className="h-4 w-4" />
+								Create Project
+							</Link>
+						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>

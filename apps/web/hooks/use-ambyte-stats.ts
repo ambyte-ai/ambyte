@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import { useProject } from "@/context/project-context";
-import { useAmbyteApi } from "@/hooks/use-ambyte-api";
+import { useProjectApi } from "@/hooks/use-project-api";
 
 // -----------------------------------------------------------------------------
 // Types (Mirroring src/schemas/stats.py)
@@ -48,7 +48,7 @@ export interface DashboardStatsResponse {
 
 export function useDashboardStats(lookbackHours: number = 24) {
 	const { projectId } = useProject();
-	const api = useAmbyteApi();
+	const api = useProjectApi();
 
 	// Key depends on projectId to auto-refetch on context switch
 	const key = projectId ? [`/stats/dashboard`, projectId, lookbackHours] : null;
@@ -56,14 +56,8 @@ export function useDashboardStats(lookbackHours: number = 24) {
 	const fetcher = async () => {
 		if (!projectId) return null;
 
-		// The API client automatically injects the Bearer token.
-		// We need to inject the X-Ambyte-Project-Id header specifically for this call
-		// because the backend stats endpoint relies on it for context.
-		return api(`/stats/dashboard?lookback_hours=${lookbackHours}`, {
-			headers: {
-				"X-Ambyte-Project-Id": projectId,
-			},
-		});
+		// Project ID header is automatically injected by useProjectApi
+		return api(`/stats/dashboard?lookback_hours=${lookbackHours}`);
 	};
 
 	const { data, error, isLoading, mutate } = useSWR<DashboardStatsResponse>(
