@@ -18,6 +18,7 @@ interface Project {
 interface Organization {
 	id: string;
 	name: string;
+	isPersonal: boolean;
 }
 
 interface ProjectContextType {
@@ -55,30 +56,35 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
 
-	// Track previous orgId to detect changes
-	const prevOrgIdRef = useRef<string | null | undefined>(undefined);
+	// Track Clerk's org ID to detect when user switches organizations
+	// Note: For personal orgs, clerkOrg is null - the API is the source of truth
+	const prevClerkOrgIdRef = useRef<string | null | undefined>(undefined);
 
-	// Listen for Clerk org changes
+	// Listen for Clerk org changes (handles team org switching)
+	// Personal org users will have clerkOrg = null, and the API response is authoritative
 	useEffect(() => {
-		const currentOrgId = clerkOrg?.id ?? null;
+		const currentClerkOrgId = clerkOrg?.id ?? null;
 
-		// Skip the first render (when prevOrgIdRef is undefined)
-		if (prevOrgIdRef.current === undefined) {
-			prevOrgIdRef.current = currentOrgId;
+		// Skip the first render (when ref is undefined)
+		if (prevClerkOrgIdRef.current === undefined) {
+			prevClerkOrgIdRef.current = currentClerkOrgId;
 			return;
 		}
 
-		// If orgId has changed, clear state and refresh
-		if (prevOrgIdRef.current !== currentOrgId) {
-			prevOrgIdRef.current = currentOrgId;
+		// If Clerk org has changed (including switching to/from personal org), refresh
+		if (prevClerkOrgIdRef.current !== currentClerkOrgId) {
+			prevClerkOrgIdRef.current = currentClerkOrgId;
 
-			// 1. Clear projects immediately
+			// 1. Clear projects immediately to prevent data leakage
 			setProjects([]);
 
-			// 2. Set projectId to null to prevent data leakage
+			// 2. Reset project selection
 			setProjectId(null);
 
-			// 3. Trigger refresh to fetch new org's projects
+			// 3. Clear current org while loading new one
+			setOrganization(null);
+
+			// 4. Fetch new org's data from API (source of truth)
 			refreshContext();
 		}
 	}, [clerkOrg?.id]);
@@ -101,6 +107,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 			setOrganization({
 				id: currentOrgId,
 				name: data.organization_name,
+				isPersonal: data.is_personal ?? false,
 			});
 
 			// 2. Set Projects List

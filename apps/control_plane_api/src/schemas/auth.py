@@ -50,4 +50,5 @@ class WhoAmIResponse(BaseModel):
 	user: UserRead
 	organization_id: UUID
 	organization_name: str
+	is_personal: bool = False  # True if it's a personal workspace (no Clerk org)
 	projects: list[ProjectBrief]
