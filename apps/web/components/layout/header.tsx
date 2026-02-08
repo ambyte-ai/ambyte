@@ -24,7 +24,7 @@ export function Header() {
 			<div className="flex items-center gap-4">
 				{/* Org Switcher (Clerk) */}
 				<OrganizationSwitcher
-					hidePersonal={true}
+					hidePersonal={false}
 					afterCreateOrganizationUrl="/dashboard"
 					appearance={{
 						elements: {
@@ -43,8 +43,8 @@ export function Header() {
 						<Button
 							variant="outline"
 							className={`h-9 gap-2 justify-between min-w-[200px] ${!hasProjects && !isLoading
-									? "border-dashed text-muted-foreground"
-									: ""
+								? "border-dashed text-muted-foreground"
+								: ""
 								}`}
 							disabled={isLoading}
 						>
