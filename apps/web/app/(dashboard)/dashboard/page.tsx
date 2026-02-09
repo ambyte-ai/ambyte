@@ -3,11 +3,8 @@
 import { useState } from "react";
 import {
 	Activity,
-	AlertTriangle,
-	ArrowRight,
 	Calendar,
 	CheckCircle2,
-	FileText,
 	Loader2,
 	Plus,
 	Server,
@@ -26,9 +23,6 @@ import { Button } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
 } from "@/components/ui/card";
 import {
 	Select,
@@ -37,18 +31,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table";
 import { useProject } from "@/context/project-context";
 import { useDashboardStats } from "@/hooks/use-ambyte-stats";
-import { cn } from "@/lib/utils";
+import { IngestionQueue } from "@/components/dashboard/ingestion-queue";
 
 // Time range mapping
 const TIME_RANGES = {
@@ -276,32 +261,8 @@ export default function DashboardPage() {
 
 				{/* ========================== ROW 4: INGESTION ========================== */}
 
-				{/* Mock Ingestion Queue Table (Visual Placeholder for Future Feature) TODO */}
-				<div className="col-span-full">
-					<Card className="border-border/50">
-						<CardHeader className="flex flex-row items-center justify-between py-4">
-							<div className="space-y-1">
-								<CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground/70 flex items-center gap-2">
-									<FileText className="h-4 w-4" />
-									Recent Contract Uploads
-								</CardTitle>
-							</div>
-							<Button variant="ghost" size="sm" className="text-xs">
-								View All <ArrowRight className="ml-1 h-3 w-3" />
-							</Button>
-						</CardHeader>
-						<CardContent>
-							{stats?.kpi.pending_ingestions === 0 && (
-								<div className="flex h-24 items-center justify-center text-sm text-muted-foreground border-dashed border border-border/50 rounded-md bg-muted/5">
-									No active ingestion jobs.
-								</div>
-							)}
-							{/* If there were active jobs, we'd render a table here. 
-                  Since listing individual jobs isn't in the stats API yet, 
-                  we show this clean state or a mock if desired. TODO */}
-						</CardContent>
-					</Card>
-				</div>
+				{/* Live Ingestion Queue Table */}
+				<IngestionQueue className="col-span-full" />
 			</div>
 		</div>
 	);
