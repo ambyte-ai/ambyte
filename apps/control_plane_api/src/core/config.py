@@ -66,6 +66,9 @@ class Settings(BaseSettings):
 	# Expected Audience (usually empty for standard Clerk setups, but good practice to check)
 	CLERK_AUDIENCE: str | None = None
 
+	# Webhook Secret
+	CLERK_WEBHOOK_SECRET: str | None = None
+
 	@computed_field
 	@property
 	def CLERK_JWKS_URL(self) -> str:

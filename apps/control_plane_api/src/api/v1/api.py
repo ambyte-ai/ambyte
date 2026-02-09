@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from src.api.v1.endpoints import audit, auth, check, lineage, obligations, project, resources, stats
+from src.api.v1.endpoints import audit, auth, check, lineage, obligations, project, resources, stats, webhooks
 
 api_router = APIRouter()
 
@@ -30,3 +30,8 @@ api_router.include_router(lineage.router, prefix='/lineage', tags=['Data Lineage
 # Analytics & Insights (Phase 7)
 # ==============================================================================
 api_router.include_router(stats.router, prefix='/stats', tags=['Analytics & Insights'])
+
+# ==============================================================================
+# Webhooks (Phase 8)
+# ==============================================================================
+api_router.include_router(webhooks.router, prefix='/webhooks', tags=['Webhooks'])
