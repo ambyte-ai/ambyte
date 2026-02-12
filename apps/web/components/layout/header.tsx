@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { ChevronDown, FolderKanban, Plus } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -42,10 +42,11 @@ export function Header() {
 					<DropdownMenuTrigger asChild>
 						<Button
 							variant="outline"
-							className={`h-9 gap-2 justify-between min-w-[200px] ${!hasProjects && !isLoading
-								? "border-dashed text-muted-foreground"
-								: ""
-								}`}
+							className={`h-9 gap-2 justify-between min-w-[200px] ${
+								!hasProjects && !isLoading
+									? "border-dashed text-muted-foreground"
+									: ""
+							}`}
 							disabled={isLoading}
 						>
 							<div className="flex items-center gap-2">
@@ -53,7 +54,8 @@ export function Header() {
 								<span>
 									{isLoading
 										? "Loading..."
-										: activeProject?.name || (hasProjects ? "Select Project" : "No Projects")}
+										: activeProject?.name ||
+											(hasProjects ? "Select Project" : "No Projects")}
 								</span>
 							</div>
 							<ChevronDown className="h-3 w-3 opacity-50" />

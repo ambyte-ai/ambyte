@@ -1,8 +1,8 @@
 "use client";
 
+import { useOrganization } from "@clerk/nextjs";
 import type React from "react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { useOrganization } from "@clerk/nextjs";
 import { useAmbyteApi } from "@/hooks/use-ambyte-api";
 
 // -----------------------------------------------------------------------------

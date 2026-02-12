@@ -13,6 +13,6 @@ import { useAmbyteApi } from "@/hooks/use-ambyte-api";
  * const data = await api("/stats/dashboard"); // Project ID header auto-injected
  */
 export function useProjectApi() {
-    const { projectId } = useProject();
-    return useAmbyteApi({ projectId });
+	const { projectId } = useProject();
+	return useAmbyteApi({ projectId });
 }

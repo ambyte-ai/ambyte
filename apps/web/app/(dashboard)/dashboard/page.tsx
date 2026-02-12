@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
 	Activity,
 	Calendar,
@@ -13,17 +12,15 @@ import {
 	UploadCloud,
 } from "lucide-react";
 import Link from "next/link";
-
+import { useState } from "react";
+import { IngestionQueue } from "@/components/dashboard/ingestion-queue";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { ReasonChart } from "@/components/dashboard/reason-chart";
 import { RiskList } from "@/components/dashboard/risk-list";
 import { TrafficChart } from "@/components/dashboard/traffic-chart";
 import { ViolationStream } from "@/components/dashboard/violation-stream";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
 	Select,
 	SelectContent,
@@ -33,7 +30,6 @@ import {
 } from "@/components/ui/select";
 import { useProject } from "@/context/project-context";
 import { useDashboardStats } from "@/hooks/use-ambyte-stats";
-import { IngestionQueue } from "@/components/dashboard/ingestion-queue";
 
 // Time range mapping
 const TIME_RANGES = {
@@ -48,9 +44,11 @@ export default function DashboardPage() {
 	const { projectId, isLoading: isProjectLoading } = useProject();
 	const [timeRange, setTimeRange] = useState<TimeRangeKey>("24h");
 
-	const { stats, isLoading: isStatsLoading, isError } = useDashboardStats(
-		TIME_RANGES[timeRange]
-	);
+	const {
+		stats,
+		isLoading: isStatsLoading,
+		isError,
+	} = useDashboardStats(TIME_RANGES[timeRange]);
 
 	const isLoading = isProjectLoading || isStatsLoading;
 
@@ -74,7 +72,8 @@ export default function DashboardPage() {
 						Welcome to Ambyte
 					</h2>
 					<p className="text-muted-foreground max-w-md mx-auto">
-						Your workspace is ready. Define your first policy or connect a data source to get started.
+						Your workspace is ready. Define your first policy or connect a data
+						source to get started.
 					</p>
 				</div>
 
@@ -211,13 +210,11 @@ export default function DashboardPage() {
 							? "All caught up"
 							: "Processing..."
 					}
-					icon={
-						stats?.kpi.pending_ingestions === 0 ? CheckCircle2 : Loader2
-					}
+					icon={stats?.kpi.pending_ingestions === 0 ? CheckCircle2 : Loader2}
 					status={stats?.kpi.pending_ingestions === 0 ? "success" : "warning"}
 					isLoading={isLoading}
 					className={
-						stats?.kpi.pending_ingestions ?? 0 > 0
+						(stats?.kpi.pending_ingestions ?? 0 > 0)
 							? "border-amber-500/30 bg-amber-500/5"
 							: ""
 					}

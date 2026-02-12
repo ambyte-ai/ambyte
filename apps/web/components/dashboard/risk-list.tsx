@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-	useRiskResources,
 	type ResourceRiskItem,
+	useRiskResources,
 } from "@/hooks/use-risk-resources";
 import { cn } from "@/lib/utils";
 
