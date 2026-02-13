@@ -85,6 +85,7 @@ export interface Obligation {
     id: string; // Slug, e.g. "gdpr-retention-customer"
     title: string;
     description: string;
+    is_active: boolean;
 
     // Metadata
     provenance: SourceProvenance;

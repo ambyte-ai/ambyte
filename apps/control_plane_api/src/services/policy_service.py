@@ -162,7 +162,10 @@ class PolicyService:
 		"""
 		List obligations with optional filtering.
 		"""
-		stmt = select(ObligationModel).where(ObligationModel.project_id == project_id, ObligationModel.is_active)
+		stmt = select(ObligationModel).where(ObligationModel.project_id == project_id)
+
+		if not filters or not filters.include_inactive:
+			stmt = stmt.where(ObligationModel.is_active.is_(True))
 
 		if filters:
 			if filters.enforcement_level:

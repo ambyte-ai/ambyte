@@ -201,6 +201,7 @@ class Obligation(AmbyteBaseModel):
 	provenance: SourceProvenance
 	enforcement_level: EnforcementLevel = EnforcementLevel.AUDIT_ONLY
 	target: ResourceSelector = Field(default_factory=ResourceSelector)
+	is_active: bool = True
 
 	retention: RetentionRule | None = None
 	geofencing: GeofencingRule | None = None
@@ -231,6 +232,7 @@ class Obligation(AmbyteBaseModel):
 			provenance=self.provenance.to_proto(),
 			enforcement_level=cast(Any, self.enforcement_level),
 			target=target_selector.to_proto(),  # pylint: disable=E1101
+			is_active=self.is_active,
 			created_at=created_ts if self.created_at else None,
 			updated_at=updated_ts if self.updated_at else None,
 		)
@@ -261,6 +263,7 @@ class Obligation(AmbyteBaseModel):
 			provenance=SourceProvenance.from_proto(proto.provenance),
 			enforcement_level=EnforcementLevel(proto.enforcement_level),
 			target=ResourceSelector.from_proto(proto.target) if proto.HasField('target') else ResourceSelector(),
+			is_active=proto.is_active,
 			# Map the active constraint
 			retention=RetentionRule.from_proto(proto.retention) if which_constraint == 'retention' else None,
 			geofencing=GeofencingRule.from_proto(proto.geofencing) if which_constraint == 'geofencing' else None,

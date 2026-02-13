@@ -12,6 +12,7 @@ export interface UseObligationsFilters {
     query?: string;
     /** Filter by strictness */
     enforcement_level?: EnforcementLevel;
+    include_inactive?: boolean;
 }
 
 // -----------------------------------------------------------------------------
@@ -32,6 +33,10 @@ export function useObligations(filters?: UseObligationsFilters) {
     if (filters?.enforcement_level !== undefined && filters.enforcement_level !== EnforcementLevel.UNSPECIFIED) {
         // The backend Pydantic model accepts the Integer value of the Enum
         queryParams.set("enforcement_level", filters.enforcement_level.toString());
+    }
+
+    if (filters?.include_inactive) {
+        queryParams.set("include_inactive", "true");
     }
 
     const queryString = queryParams.toString();

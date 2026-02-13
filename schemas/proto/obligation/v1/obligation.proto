@@ -29,6 +29,8 @@ message Obligation {
   // Determines which resources (via URN pattern or Tags) this rule applies to.
   ResourceSelector target = 6;
 
+  bool is_active = 7;
+
   // The actual technical constraint.
   // Using 'oneof' ensures this obligation maps to exactly one logic type.
   oneof constraint {

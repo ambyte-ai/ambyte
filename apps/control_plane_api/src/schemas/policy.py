@@ -36,6 +36,7 @@ class ObligationFilter(BaseModel):
 	)
 	# Allows searching by partial title match
 	query: str | None = Field(default=None, description='Search term for title or slug')
+	include_inactive: bool = Field(default=False, description='If true, returns archived policies.')
 
 
 class PolicySummary(BaseModel):
