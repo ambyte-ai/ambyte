@@ -1,6 +1,6 @@
 "use client";
 
-import { useOrganization } from "@clerk/nextjs";
+import { useOrganization, useAuth } from "@clerk/nextjs";
 import type React from "react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useAmbyteApi } from "@/hooks/use-ambyte-api";
@@ -46,6 +46,7 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
 	const api = useAmbyteApi();
 	const { organization: clerkOrg } = useOrganization();
+	const { isLoaded, isSignedIn } = useAuth();
 
 	// State
 	const [projectId, setProjectId] = useState<string | null>(null);
@@ -140,8 +141,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
 	// Trigger load on mount
 	useEffect(() => {
-		refreshContext();
-	}, [api]);
+		if (isLoaded && isSignedIn) {
+			refreshContext();
+		}
+	}, [api, isLoaded, isSignedIn]);
 
 	// Handle manual project switching
 	const handleSetProject = (id: string) => {

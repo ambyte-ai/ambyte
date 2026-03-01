@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -98,9 +98,7 @@ async def _get_clerk_jwks() -> dict[str, Any]:
 
 	# Always update in-memory cache as fallback
 	_JWKS_MEMORY_CACHE = indexed_jwks
-	_JWKS_CACHE_EXPIRY = datetime.now(timezone.utc).replace(
-		second=datetime.now(timezone.utc).second + JWKS_CACHE_TTL_SECONDS
-	)
+	_JWKS_CACHE_EXPIRY = datetime.now(timezone.utc) + timedelta(seconds=JWKS_CACHE_TTL_SECONDS)
 
 	return indexed_jwks
 
