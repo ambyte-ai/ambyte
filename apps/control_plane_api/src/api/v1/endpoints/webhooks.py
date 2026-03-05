@@ -1,8 +1,9 @@
 import logging
-from typing import Any, cast
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
-from sqlalchemy import CursorResult, delete
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from src.core.config import settings
 from src.db.models.auth import User
 from src.db.session import AsyncSessionLocal
@@ -55,7 +56,8 @@ async def clerk_webhook(
 async def _handle_user_deleted(data: dict[str, Any]):
 	"""
 	Deletes the user from local Postgres.
-	Your schema has ON DELETE CASCADE on memberships, so those will clean up automatically.
+	If the user belonged to a Personal Organization and is the last member,
+	cleans up the entire organization (which cascades to projects, resources, etc).
 	"""
 	external_id = data.get('id')
 	if not external_id:
@@ -64,12 +66,35 @@ async def _handle_user_deleted(data: dict[str, Any]):
 	logger.info(f'Processing deletion for user {external_id}')
 
 	async with AsyncSessionLocal() as db:
-		# Delete user by external_id (Clerk ID)
-		stmt = delete(User).where(User.external_id == external_id)
-		result = cast(CursorResult, await db.execute(stmt))
-		await db.commit()
+		# 1. Fetch the user AND their organization before deleting
+		stmt = select(User).options(selectinload(User.organization)).where(User.external_id == external_id)
+		result = await db.execute(stmt)
+		user = result.scalars().first()
 
-		if result.rowcount > 0:
-			logger.info(f'✅ User {external_id} deleted from local database.')
-		else:
+		if not user:
 			logger.info(f'User {external_id} not found in local database (already deleted?).')
+			return
+
+		org = user.organization
+		org_id = org.id
+
+		# In deps.py, personal orgs are created with external_id = None
+		is_personal_org = org.external_id is None
+
+		# 2. Delete the User
+		# (This automatically deletes their ProjectMemberships via CASCADE)
+		await db.delete(user)
+		await db.flush()  # Flush to update the DB state without committing yet
+
+		# 3. If it's a personal org, check if it's now empty
+		if is_personal_org:
+			count_stmt = select(func.count(User.id)).where(User.organization_id == org_id)
+			remaining_users = await db.scalar(count_stmt)
+
+			if remaining_users == 0:
+				logger.info(f'Personal organization {org_id} is now empty. Deleting org and cascading data.')
+				await db.delete(org)
+
+		# 4. Commit the transaction
+		await db.commit()
+		logger.info(f'✅ User {external_id} deletion logic complete.')

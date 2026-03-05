@@ -3,6 +3,7 @@
 import {
 	AlertCircle,
 	CheckCircle2,
+	ChevronRight,
 	FileText,
 	Loader2,
 	RefreshCw,
@@ -35,6 +36,7 @@ import { cn } from "@/lib/utils";
 
 interface IngestionQueueProps {
 	className?: string;
+	onJobClick?: (job: IngestJob) => void;
 }
 
 // -----------------------------------------------------------------------------
@@ -104,7 +106,7 @@ const STATUS_CONFIG: Record<
 	},
 };
 
-export function IngestionQueue({ className }: IngestionQueueProps) {
+export function IngestionQueue({ className, onJobClick }: IngestionQueueProps) {
 	const { jobs, isLoading, refresh } = useIngestJobs(10);
 
 	// Filter out jobs that might be corrupted or missing IDs
@@ -158,7 +160,7 @@ export function IngestionQueue({ className }: IngestionQueueProps) {
 						</TableHeader>
 						<TableBody>
 							{validJobs.map((job) => (
-								<JobRow key={job.job_id} job={job} />
+								<JobRow key={job.job_id} job={job} onJobClick={onJobClick} />
 							))}
 						</TableBody>
 					</Table>
@@ -168,7 +170,13 @@ export function IngestionQueue({ className }: IngestionQueueProps) {
 	);
 }
 
-function JobRow({ job }: { job: IngestJob }) {
+function JobRow({
+	job,
+	onJobClick,
+}: {
+	job: IngestJob;
+	onJobClick?: (job: IngestJob) => void;
+}) {
 	const config = STATUS_CONFIG[job.status] || STATUS_CONFIG.QUEUED;
 	const StatusIcon = config.icon;
 
@@ -179,17 +187,17 @@ function JobRow({ job }: { job: IngestJob }) {
 		? `${job.stats.duration_seconds.toFixed(1)}s`
 		: "--";
 
-	// Result summary
-	let resultText = duration;
-	if (job.status === "COMPLETED") {
-		const obsCount = job.stats?.final_obligations_count ?? 0;
-		resultText = `${obsCount} Rules`;
-	} else if (job.status === "FAILED") {
-		resultText = "Error";
-	}
+	// Interactivity check
+	const isClickable = job.status === "COMPLETED" && !!onJobClick;
 
 	return (
-		<TableRow className="hover:bg-muted/30 border-border/40 transition-colors">
+		<TableRow
+			className={cn(
+				"border-border/40 transition-colors group",
+				isClickable ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30"
+			)}
+			onClick={() => isClickable && onJobClick(job)}
+		>
 			{/* FILE INFO */}
 			<TableCell className="py-3">
 				<div className="flex items-center gap-3">
@@ -215,7 +223,7 @@ function JobRow({ job }: { job: IngestJob }) {
 					variant="outline"
 					className={cn(
 						"font-mono text-[10px] font-medium px-2 py-0.5 h-6 gap-1.5",
-						config.color,
+						config.color
 					)}
 				>
 					<StatusIcon
@@ -237,9 +245,18 @@ function JobRow({ job }: { job: IngestJob }) {
 
 			{/* METRICS */}
 			<TableCell className="py-3 text-right">
-				<span className="font-mono text-xs font-medium text-foreground/80">
-					{resultText}
-				</span>
+				<div className="flex items-center justify-end gap-2">
+					<span className="font-mono text-xs font-medium text-foreground/80">
+						{job.status === "COMPLETED"
+							? `${job.stats?.final_obligations_count ?? 0} Rules`
+							: job.status === "FAILED"
+								? "Error"
+								: duration}
+					</span>
+					{isClickable && (
+						<ChevronRight className="h-4 w-4 text-muted-foreground opacity-50 group-hover:opacity-100 group-hover:text-foreground transition-all" />
+					)}
+				</div>
 			</TableCell>
 		</TableRow>
 	);
