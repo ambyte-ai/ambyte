@@ -37,7 +37,9 @@ class User(Base, UUIDMixin, TimestampMixin):
 	organization: Mapped[Organization] = relationship(back_populates='users')
 
 	# Project memberships (for project-level RBAC)
-	project_memberships: Mapped[list[ProjectMembership]] = relationship(back_populates='user')
+	project_memberships: Mapped[list[ProjectMembership]] = relationship(
+		back_populates='user', cascade='all, delete-orphan', passive_deletes=True
+	)
 
 
 class ApiKey(Base, UUIDMixin, TimestampMixin, ProjectScopedMixin):

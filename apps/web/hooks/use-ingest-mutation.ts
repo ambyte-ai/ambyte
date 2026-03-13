@@ -54,7 +54,7 @@ export function useIngestMutation(): UseIngestMutationResult {
                 headers.set("X-Ambyte-Project-Id", projectId);
 
                 // 5. Execute Request
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+                const baseUrl = process.env.NEXT_PUBLIC_INGEST_API_URL || "http://127.0.0.1:8001";
 
                 // Ensure no double slashes if baseUrl ends with /v1
                 const endpoint = baseUrl.endsWith("/v1") ? "/ingest" : "/v1/ingest";
