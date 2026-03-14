@@ -4,6 +4,7 @@ from uuid import UUID
 
 from ambyte_schemas.models.audit import AuditProof
 from fastapi import APIRouter, Depends, Path, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import VerifyScope, get_current_project
 from src.core.scopes import Scope
@@ -15,6 +16,29 @@ from src.services.audit_service import AuditService
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ==============================================================================
+# Cryptography & Integrity
+# ==============================================================================
+
+
+class PublicKeyResponse(BaseModel):
+	public_key: str
+
+
+@router.get(
+	'/public-key',
+	response_model=PublicKeyResponse,
+	summary='Get System Public Key',
+	description='Returns the Ed25519 public key used to cryptographically verify audit block signatures.',
+)
+async def get_public_key():
+	"""
+	Exposes the Ambyte system public key.
+	Users can use this key in the CLI (`ambyte audit verify`) to mathematically
+	prove that their audit logs have not been tampered with.
+	"""
+	return {'public_key': 'dc68558900e06e39af21ac542ec6819c99f997114b028ef3024833ef5ccf158b'}
 
 
 @router.post(

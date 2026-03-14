@@ -48,7 +48,7 @@ class ProjectMembership(Base, UUIDMixin, TimestampMixin):
 		index=True,
 	)
 
-	role: Mapped[str] = mapped_column(
+	role: Mapped[ProjectRole] = mapped_column(
 		String,
 		nullable=False,
 		default=ProjectRole.VIEWER,
