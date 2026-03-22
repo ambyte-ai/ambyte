@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Path, Security, status
+from fastapi import Depends, Header, HTTPException, Path, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,16 +76,52 @@ async def get_current_api_key(
 	return api_key
 
 
-async def get_current_project(api_key: Annotated[ApiKey, Depends(get_current_api_key)]) -> Project:
+async def get_current_project(
+	token_creds: Annotated[HTTPAuthorizationCredentials, Security(reusable_oauth2)],
+	db: Annotated[AsyncSession, Depends(get_db)],
+	x_ambyte_project_id: Annotated[str | None, Header()] = None,
+) -> Project:
 	"""
-	High-level dependency: Returns the Project associated with the API Key.
+	High-level dependency: Returns the Project associated with the API Key or Human User context.
 	"""
-	return api_key.project
+	token = token_creds.credentials
+
+	# Machine Auth
+	if token.startswith('sk_live_') or token.startswith('sk_test_') or token.startswith('sk_ingest_'):
+		api_key = await get_current_api_key(token_creds, db)
+		return api_key.project
+
+	# Human Auth
+	if not x_ambyte_project_id:
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Missing X-Ambyte-Project-Id header')
+
+	try:
+		project_uuid = uuid.UUID(x_ambyte_project_id)
+	except ValueError as e:
+		raise HTTPException(status_code=400, detail='Invalid Project ID format') from e
+
+	current_user = await get_current_user(token_creds, db)
+
+	# Enforce Tenant Isolation / Project Access
+	query = select(Project).where(Project.id == project_uuid)
+	result = await db.execute(query)
+	project = result.scalars().first()
+
+	if not project:
+		raise HTTPException(status_code=404, detail='Project not found')
+
+	has_access = current_user.is_superuser or (project.organization_id == current_user.organization_id)
+
+	if not has_access:
+		raise HTTPException(status_code=404, detail='Project not found')
+
+	return project
 
 
 class VerifyScope:
 	"""
 	Enforces that an API Key possesses a specific capability.
+	Bypasses scope checking for Human Users (relies on RBAC).
 
 	Usage:
 	    @router.post("/check", dependencies=[Depends(VerifyScope(Scope.CHECK_WRITE))])
@@ -94,22 +130,35 @@ class VerifyScope:
 	def __init__(self, required_scope: str):
 		self.required_scope = required_scope
 
-	def __call__(self, api_key: Annotated[ApiKey, Depends(get_current_api_key)]):
+	async def __call__(
+		self,
+		token_creds: Annotated[HTTPAuthorizationCredentials, Security(reusable_oauth2)],
+		db: Annotated[AsyncSession, Depends(get_db)],
+	):
 		"""
 		FastAPI calls this method when evaluating the dependency.
 		"""
-		# 1. 'admin' scope is a wildcard that allows everything
-		if Scope.ADMIN in api_key.scopes:
-			return True
+		token = token_creds.credentials
 
-		# 2. Check for exact match
-		if self.required_scope not in api_key.scopes:
-			# We explicitly mention the missing scope to help developers debug
-			raise HTTPException(
-				status_code=status.HTTP_403_FORBIDDEN,
-				detail=f"Not authorized. API Key missing required scope: '{self.required_scope}'",
-			)
-		return True
+		if token.startswith('sk_live_') or token.startswith('sk_test_') or token.startswith('sk_ingest_'):
+			api_key = await get_current_api_key(token_creds, db)
+
+			# 1. 'admin' scope is a wildcard that allows everything
+			if Scope.ADMIN in api_key.scopes:
+				return True
+
+			# 2. Check for exact match
+			if self.required_scope not in api_key.scopes:
+				# We explicitly mention the missing scope to help developers debug
+				raise HTTPException(
+					status_code=status.HTTP_403_FORBIDDEN,
+					detail=f"Not authorized. API Key missing required scope: '{self.required_scope}'",
+				)
+			return True
+		else:
+			# Validate Human User Token
+			await get_current_user(token_creds, db)
+			return True
 
 
 # ==============================================================================
