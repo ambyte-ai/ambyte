@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # Input: Create
@@ -20,6 +20,7 @@ class ApiKeyRead(BaseModel):
 	created_at: datetime
 	last_used_at: datetime | None
 	expires_at: datetime | None
+	model_config = ConfigDict(from_attributes=True)
 
 
 # Output: Secret (Shown ONLY once upon creation)
