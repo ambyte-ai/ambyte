@@ -89,6 +89,23 @@ async def get_current_project(
 	# Machine Auth
 	if token.startswith('sk_live_') or token.startswith('sk_test_') or token.startswith('sk_ingest_'):
 		api_key = await get_current_api_key(token_creds, db)
+
+		# Allow the internal ingest worker to impersonate the requested project
+		# instead of forcing it into its native bootstrap project.
+		if token.startswith('sk_ingest_') and x_ambyte_project_id:
+			try:
+				project_uuid = uuid.UUID(x_ambyte_project_id)
+			except ValueError as e:
+				raise HTTPException(status_code=400, detail='Invalid Project ID format') from e
+
+			query = select(Project).where(Project.id == project_uuid)
+			result = await db.execute(query)
+			target_project = result.scalars().first()
+
+			if not target_project:
+				raise HTTPException(status_code=404, detail='Project not found')
+			return target_project
+
 		return api_key.project
 
 	# Human Auth

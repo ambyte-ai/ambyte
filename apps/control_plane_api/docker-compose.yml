@@ -197,6 +197,7 @@ services:
       /bin/sh -c "
       /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb myminio/ambyte-raw --ignore-existing;
+      /usr/bin/mc anonymous set download myminio/ambyte-raw;
       exit 0;
       "
 

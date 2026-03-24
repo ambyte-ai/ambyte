@@ -26,6 +26,24 @@ interface ObligationDrawerProps {
 	onOpenChange: (open: boolean) => void;
 }
 
+function getDocumentUrl(uri?: string) {
+	if (!uri) return "#";
+
+	// If it's already an HTTP link, just return it
+	if (uri.startsWith("http://") || uri.startsWith("https://")) {
+		return uri;
+	}
+
+	// Convert s3://bucket/key to local MinIO HTTP URL
+	if (uri.startsWith("s3://")) {
+		const path = uri.replace("s3://", "");
+		// Port 9000 is where MinIO serves files
+		return `http://localhost:9000/${path}`;
+	}
+
+	return uri;
+}
+
 export function ObligationDrawer({
 	obligation,
 	open,
@@ -166,7 +184,7 @@ export function ObligationDrawer({
 												Resources
 											</h3>
 											<a
-												href={obligation.provenance.document_uri}
+												href={getDocumentUrl(obligation.provenance.document_uri)}
 												target="_blank"
 												rel="noopener noreferrer"
 												className="flex items-center gap-2 text-sm text-primary hover:underline bg-muted/30 p-3 rounded-md border"

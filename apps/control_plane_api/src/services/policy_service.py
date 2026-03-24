@@ -3,6 +3,7 @@ import json
 import logging
 from uuid import UUID, uuid4
 
+from ambyte_schemas.models.obligation import EnforcementLevel
 from ambyte_schemas.models.obligation import Obligation as PydanticObligation
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -79,15 +80,22 @@ class PolicyService:
 
 			summary_report.append(PolicySummary(slug=ob.id, title=ob.title, status=status, version=version))
 
+			try:
+				env_name = (
+					ob.enforcement_level.name
+					if hasattr(ob.enforcement_level, 'name')
+					else EnforcementLevel(ob.enforcement_level).name
+				)
+			except ValueError:
+				env_name = 'AUDIT_ONLY'
+
 			# Prepare DB row
 			upsert_values.append(
 				{
 					'project_id': project_id,
 					'slug': ob.id,
 					'title': ob.title,
-					'enforcement_level': ob.enforcement_level.name
-					if hasattr(ob.enforcement_level, 'name')
-					else str(ob.enforcement_level),
+					'enforcement_level': env_name,
 					'definition': definition_json,
 					'source_hash': new_hash,
 					'version': version,
