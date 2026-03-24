@@ -50,6 +50,11 @@ export function useAmbyteApi(options: UseAmbyteApiOptions = {}) {
 				throw new Error(`API Error: ${response.statusText}`);
 			}
 
+			// Handle 204 No Content responses which have no body
+			if (response.status === 204) {
+				return null;
+			}
+
 			return response.json();
 		},
 		[getToken, orgId, projectId],
