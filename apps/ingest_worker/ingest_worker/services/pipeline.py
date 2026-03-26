@@ -151,6 +151,7 @@ class IngestionPipeline:
 			return {
 				'status': 'completed',
 				'job_id': job_id,
+				'filename': filename,
 				'duration_seconds': round(total_duration, 2),
 				'chunks_processed': len(chunks),
 				'definitions_found': len(context.definitions),

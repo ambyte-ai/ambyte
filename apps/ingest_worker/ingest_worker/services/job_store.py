@@ -40,14 +40,12 @@ class JobStore:
 		"""Namespaces the keys."""
 		return f'ambyte:jobs:{job_id}'
 
-	async def create_job(self, job_id: str) -> IngestJobResponse:
+	async def create_job(self, job_id: str, filename: str = 'Unknown Document') -> IngestJobResponse:
 		"""
 		Initializes a new job entry with status QUEUED.
 		"""
 		job = IngestJobResponse(
-			job_id=job_id,
-			status=IngestStatus.QUEUED,
-			message='Job created and queued.',
+			job_id=job_id, status=IngestStatus.QUEUED, message='Job created and queued.', stats={'filename': filename}
 		)
 		await self._save(job)
 		return job
@@ -87,7 +85,7 @@ class JobStore:
 		job = await self.get_job(job_id)
 		if job:
 			job.status = IngestStatus.COMPLETED
-			job.stats = stats
+			job.stats.update(stats)
 			job.message = 'Ingestion successful'
 			await self._save(job)
 

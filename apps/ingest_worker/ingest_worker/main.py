@@ -148,7 +148,7 @@ async def trigger_ingestion(
 		s3_uri = await blob_storage.upload_stream(file_obj=file.file, key=s3_key, content_type=file.content_type)
 
 		# 2. Initialize Job State
-		job_info = await job_store.create_job(job_id)
+		job_info = await job_store.create_job(job_id, filename=filename)
 
 		# 3. Enqueue job to ARQ worker process
 		# Instead of a file path, we pass the S3 Key and URI
