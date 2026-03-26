@@ -194,7 +194,7 @@ function JobRow({
 		<TableRow
 			className={cn(
 				"border-border/40 transition-colors group",
-				isClickable ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30"
+				isClickable ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30",
 			)}
 			onClick={() => isClickable && onJobClick(job)}
 		>
@@ -223,7 +223,7 @@ function JobRow({
 					variant="outline"
 					className={cn(
 						"font-mono text-[10px] font-medium px-2 py-0.5 h-6 gap-1.5",
-						config.color
+						config.color,
 					)}
 				>
 					<StatusIcon

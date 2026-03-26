@@ -184,7 +184,9 @@ export function ObligationDrawer({
 												Resources
 											</h3>
 											<a
-												href={getDocumentUrl(obligation.provenance.document_uri)}
+												href={getDocumentUrl(
+													obligation.provenance.document_uri,
+												)}
 												target="_blank"
 												rel="noopener noreferrer"
 												className="flex items-center gap-2 text-sm text-primary hover:underline bg-muted/30 p-3 rounded-md border"
