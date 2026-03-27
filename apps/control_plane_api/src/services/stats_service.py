@@ -42,7 +42,7 @@ class StatsService:
 		try:
 			if cache.client:
 				# Use scan_iter for safe iteration over keys
-				# Note: In a high-scale production env, we would maintain a separate Redis Set of active job IDs TODO
+				# Note: In a high-scale production env, we would maintain a separate Redis Set of active job IDs
 				# to avoid scanning, but scanning with match is acceptable for the 24h TTL used by job_store.
 				async for key in cache.client.scan_iter(match='ambyte:jobs:*'):
 					raw_val = await cache.client.get(key)

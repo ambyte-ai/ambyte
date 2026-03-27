@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 	# 1. Ambyte Control Plane Configuration
 	# ==========================================================================
 	CONTROL_PLANE_URL: Annotated[str, BeforeValidator(lambda v: str(v))] = Field(
-		default='http://localhost:8000',  # TODO: change to api.ambyte.ai in prod
+		default='http://localhost:8000',
 		description='Base URL of the Ambyte Control Plane API.',
 	)
 

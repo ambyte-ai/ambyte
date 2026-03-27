@@ -27,6 +27,9 @@ class LineageRun(Base, UUIDMixin, ProjectScopedMixin):
 	# Did the job actually succeed? (If failed, data might not have moved)
 	success: Mapped[bool] = mapped_column(Boolean, default=False)
 
+	# Actor who initiated this run
+	triggered_by: Mapped[str | None] = mapped_column(String, nullable=True)
+
 	# Relationships
 	edges: Mapped[list['LineageEdge']] = relationship(back_populates='run', cascade='all, delete-orphan')
 
