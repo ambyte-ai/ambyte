@@ -37,7 +37,7 @@ class CloudConfig(BaseModel):
 	Note: Secrets (API Keys) are NOT stored here; they go in ~/.ambyte/credentials.
 	"""
 
-	url: HttpUrl = Field(default=HttpUrl('https://api.ambyte.ai'), description='API Base URL')
+	url: HttpUrl = Field(default=HttpUrl('http://localhost:8000'), description='API Base URL')
 	organization_id: str | None = Field(default=None, description='The Org ID this workspace belongs to.')
 	project_id: str | None = Field(default=None, description='The specific Project ID.')
 
