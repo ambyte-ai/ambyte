@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 
 import { ConstraintIcon } from "@/components/obligations/constraint-icon";
 import { EnforcementBadge } from "@/components/obligations/enforcement-badge";
+import { ResourceLineageTab } from "@/components/inventory/resource-lineage-tab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -437,35 +438,10 @@ export function ResourceDrawer({
                         </TabsContent>
 
                         {/* =======================================================
-                            TAB 3: LINEAGE (V1 Mockup / TODO)
+                            TAB 3: LINEAGE
                         ======================================================= */}
-                        <TabsContent value="lineage" className="m-0 outline-none">
-                            <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                                <div className="h-16 w-16 rounded-full bg-indigo-500/10 flex items-center justify-center">
-                                    <GitBranch className="h-8 w-8 text-indigo-400" />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold tracking-tight">
-                                        Lineage Tracking
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground max-w-sm mx-auto mt-2">
-                                        Data dependency graphs and inherited risk calculations will
-                                        be visualized here in a future update.
-                                    </p>
-                                </div>
-
-                                {/* If the resource has hierarchy, show it as a teaser */}
-                                {resource.attributes?.hierarchy && (
-                                    <div className="mt-8 text-left bg-muted/20 border rounded-lg p-4 w-full">
-                                        <p className="text-xs font-bold uppercase text-muted-foreground mb-2">
-                                            Hierarchy Context
-                                        </p>
-                                        <pre className="text-xs font-mono text-foreground/80">
-                                            {JSON.stringify(resource.attributes.hierarchy, null, 2)}
-                                        </pre>
-                                    </div>
-                                )}
-                            </div>
+                        <TabsContent value="lineage" className="m-0 p-6 outline-none">
+                            <ResourceLineageTab resource={resource} />
                         </TabsContent>
                     </ScrollArea>
                 </Tabs>
