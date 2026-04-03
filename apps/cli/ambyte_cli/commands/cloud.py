@@ -194,21 +194,21 @@ def login():
 			console.print('Generate an API Key and use option [bold]3[/bold].\n')
 			return
 
-		# 4. Finalizing
-		if final_api_key and user_data and selected_project:
-			# Save to ~/.ambyte/credentials
-			auth_svc.save(
-				api_key=final_api_key, project_id=str(selected_project['id']), org_id=str(user_data['organization_id'])
-			)
+	# 4. Finalizing
+	if final_api_key and user_data and selected_project:
+		# Save to ~/.ambyte/credentials
+		auth_svc.save(
+			api_key=final_api_key, project_id=str(selected_project['id']), org_id=str(user_data['organization_id'])
+		)
 
-			# Update local .ambyte/config.yaml if we are in a project
-			if config:
-				config.cloud.project_id = str(selected_project['id'])
-				config.cloud.organization_id = str(user_data['organization_id'])
-				save_config(config, get_workspace_root())
+		# Update local .ambyte/config.yaml if we are in a project
+		if config:
+			config.cloud.project_id = str(selected_project['id'])
+			config.cloud.organization_id = str(user_data['organization_id'])
+			save_config(config, get_workspace_root())
 
-			console.print(f'\n[good]Success![/good] Authenticated as [bold]{user_data["user"]["email"]}[/bold]')
-			console.print(f'Default project set to: [cyan]{selected_project["name"]}[/cyan]')
+		console.print(f'\n[good]Success![/good] Authenticated as [bold]{user_data["user"]["email"]}[/bold]')
+		console.print(f'Default project set to: [cyan]{selected_project["name"]}[/cyan]')
 
 
 def push(
