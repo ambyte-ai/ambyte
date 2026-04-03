@@ -175,6 +175,15 @@ class LineageService:
 				# Node exists in Inventory
 				attrs = resource.attributes or {}
 
+				# Check root attribute first, fallback to nested tags
+				sens = str(attrs.get('sensitivity', 'UNSPECIFIED')).upper()
+				if sens == 'UNSPECIFIED':
+					sens = str(attrs.get('tags', {}).get('sensitivity', 'UNSPECIFIED')).upper()
+
+				risk = str(attrs.get('risk_level', 'UNSPECIFIED')).upper()
+				if risk == 'UNSPECIFIED':
+					risk = str(attrs.get('tags', {}).get('risk_level', 'UNSPECIFIED')).upper()
+
 				# Determine AI Restriction (The "Poison Pill")
 				# Look for explicit ai_training_allowed=False or specific tags
 				is_restricted = attrs.get('ai_training_allowed') is False
@@ -185,8 +194,8 @@ class LineageService:
 						label=resource.name or urn.split(':')[-1],
 						platform=resource.platform,
 						node_type='model' if 'model' in urn.lower() else 'resource',
-						sensitivity=str(attrs.get('sensitivity', 'UNSPECIFIED')),
-						risk_level=str(attrs.get('risk_level', 'UNSPECIFIED')),
+						sensitivity=sens,
+						risk_level=risk,
 						tags=attrs.get('tags', {}),
 						is_ai_restricted=is_restricted,
 					)

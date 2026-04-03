@@ -36,6 +36,7 @@ export function ResourceNode({ data, id }: { data: GraphNode; id: string }) {
     // 4. Compute Sensitivity Ring (Border Color)
     const sensitivityColors: Record<string, string> = {
         RESTRICTED: "border-rose-500/50 shadow-[0_0_15px_-3px_rgba(244,63,94,0.3)]",
+        HIGH: "border-rose-500/50 shadow-[0_0_15px_-3px_rgba(244,63,94,0.3)]",
         CONFIDENTIAL: "border-amber-500/50 shadow-[0_0_15px_-3px_rgba(245,158,11,0.2)]",
         INTERNAL: "border-blue-500/30",
         PUBLIC: "border-emerald-500/30",

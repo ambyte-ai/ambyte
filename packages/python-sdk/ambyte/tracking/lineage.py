@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from types import TracebackType
 
-from ambyte.context import AmbyteContext
+from ambyte.context import AmbyteContext, get_current_actor
 from ambyte.tracking.manager import get_tracker
 from ambyte_schemas.models.common import Actor
 from ambyte_schemas.models.lineage import RunType
@@ -42,11 +42,14 @@ class LineageTracer:
 		# 2. Start Timer
 		self.start_time = datetime.now(timezone.utc)
 
+		actor = get_current_actor()
+
 		# 3. Emit "Run Started" Signal
 		payload = {
 			'external_run_id': self.run_id,
 			'run_type': self.run_type,
-			'start_time': self.start_time.isoformat(),
+			'started_at': self.start_time.isoformat(),
+			'triggered_by': actor.id if actor else None,
 			# We don't know success yet
 		}
 		self.tracker.enqueue('lineage_run', payload)
@@ -63,13 +66,13 @@ class LineageTracer:
 		is_success = exc_type is None
 
 		# 4. Emit "Run Finished" Signal
-		run_payload = {'external_run_id': self.run_id, 'end_time': end_time.isoformat(), 'success': is_success}
+		run_payload = {'external_run_id': self.run_id, 'end_at': end_time.isoformat(), 'success': is_success}
 		self.tracker.enqueue('lineage_run', run_payload)
 
 		# 5. Emit the actual Lineage Edge (Inputs -> Outputs)
 		# Only emit if the job actually did something (or even if it failed, to track intent)
 		if self.inputs or self.outputs:
-			event_payload = {'external_run_id': self.run_id, 'input_urns': self.inputs, 'output_urns': self.outputs}
+			event_payload = {'external_run_id': self.run_id, 'inputs': self.inputs, 'outputs': self.outputs}
 			self.tracker.enqueue('lineage_event', event_payload)
 
 		# 6. Exit ContextVars Scope
