@@ -1,0 +1,25 @@
+[project]
+name = "ambyte"
+version = "0.1.0"
+description = "Policy as Code for Data & AI"
+authors = [{ name = "Enzo Biondo", email = "enzobiondo11@outlook.com" }]
+readme = "../../README.md"
+requires-python = ">=3.11"
+
+# Core dependencies installed with `pip install ambyte`
+dependencies = [
+    "ambyte-sdk>=0.1.0",
+    "ambyte-cli>=0.1.0"
+]
+
+# Optional dependencies installed with `pip install ambyte[databricks]`
+[project.optional-dependencies]
+databricks = ["ambyte-databricks>=0.1.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Crucial: Tells hatchling not to look for a source folder
+[tool.hatch.build.targets.wheel]
+packages = []

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "The Python SDK for rights-aware data pipelines"
 requires-python = ">=3.11"
 dependencies = [
-    "ambyte-schemas", # Depends on the local workspace package
+    "ambyte-schemas>=0.1.0", # Depends on the local workspace package
     "opentelemetry-api>=1.38.0",
     "httpx>=0.28.1",
     "pydantic-settings>=2.12.0", 

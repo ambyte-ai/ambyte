@@ -3,8 +3,8 @@ name = "ambyte-cli"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "ambyte-sdk",
-    "ambyte-compiler",
+    "ambyte-sdk>=0.1.0",
+    "ambyte-compiler>=0.1.0",
     "typer>=0.20.0",
     "rich>=14.2.0",
     "python-dotenv>=1.2.1",

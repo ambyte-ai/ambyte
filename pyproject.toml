@@ -13,7 +13,6 @@ requires-python = ">=3.11,<3.14"
 dependencies = [
     "ambyte-sdk",
     "ambyte-schemas",
-    "ambyte-connectors",
     "ambyte-control-plane-api",
     "ambyte-ingest",
     "ambyte-compiler",
@@ -33,11 +32,9 @@ members = [
     "apps/ingest_worker",
     "packages/python-sdk",
     "packages/rules-engine",
-    # CONNECTORS - Do NOT use wildcard here because of Go code
-    "connectors/airflow-operator",
-    "connectors/python-common",
     "connectors/databricks-unity",
-    "schemas"
+    "schemas",
+    "packages/ambyte"
 ]
 
 [tool.uv.sources]

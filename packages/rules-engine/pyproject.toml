@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Logic for policy conflict resolution and enforcement"
 requires-python = ">=3.11"
 dependencies = [
-    "ambyte-schemas",
+    "ambyte-schemas>=0.1.0",
 ]
 
 [build-system]
