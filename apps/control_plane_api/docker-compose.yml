@@ -201,6 +201,31 @@ services:
       exit 0;
       "
 
+# ============================================================================
+  # FRONTEND (Next.js Dashboard)
+  # ============================================================================
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+      args:
+        # Pass variables required at BUILD TIME for the browser bundle
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/v1}
+        - NEXT_PUBLIC_INGEST_API_URL=${NEXT_PUBLIC_INGEST_API_URL:-http://localhost:8001}
+        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+    container_name: ambyte-web
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../../.env
+    environment:
+      - NODE_ENV=production
+      # Runtime secrets (not baked into browser bundle)
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+    depends_on:
+      - api
+
 volumes:
   ambyte_pg_data:
   ambyte_redis_data:
