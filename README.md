@@ -29,6 +29,7 @@ If you want enterprise-grade data governance, cryptographically sealed audit log
 Ambyte is designed to run entirely within your VPC. The easiest way to start is using Docker Compose to spin up the Control Plane, and our CLI to interact with it.
 
 ### 1. Spin up the Control Plane (Backend, UI, Database, Vector Store)
+
 > You need to configure your Clerk Auth to access the local UI:
 ```
 # API Endpoints (Point to your local docker-compose services)
@@ -52,6 +53,7 @@ docker compose up -d
 
 # Initialize the database and get your Root API Key
 docker compose exec api python src/scripts/init_db.py
+```
 
 ### 2. Install the CLI & SDK
 ```bash
