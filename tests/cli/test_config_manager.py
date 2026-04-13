@@ -57,7 +57,7 @@ def test_ambyte_config_defaults():
 	assert conf.artifacts_dir == Path('.ambyte/dist')
 
 	# Cloud defaults
-	assert str(conf.cloud.url) == 'https://api.ambyte.ai/'
+	assert str(conf.cloud.url) == 'http://localhost:8000/'
 	assert conf.cloud.organization_id is None
 
 

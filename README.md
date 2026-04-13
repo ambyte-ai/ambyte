@@ -1,9 +1,7 @@
 <div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://via.placeholder.com/600x150/09090b/ffffff?text=Ambyte+Logo+(Dark)">
-    <source media="(prefers-color-scheme: light)" srcset="https://via.placeholder.com/600x150/ffffff/000000?text=Ambyte+Logo+(Light)">
-    <img alt="Ambyte - Compliance as Code" src="https://via.placeholder.com/600x150/09090b/ffffff?text=Ambyte" width="400">
-  </picture>
+  <img alt="Ambyte - Compliance as Code" src="static/ambyte-logo.png" width="400">
+
+  <h1><strong>Ambyte</strong></h1>
   
   <p><strong>Turn legal obligations into machine-enforceable data policies.</strong></p>
 </div>

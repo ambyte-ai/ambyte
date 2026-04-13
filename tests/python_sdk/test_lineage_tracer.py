@@ -39,7 +39,7 @@ def test_trace_lifecycle_success(mock_tracker):
 		start_call = mock_tracker.enqueue.call_args_list[0]
 		assert start_call[0][0] == 'lineage_run'
 		assert start_call[0][1]['external_run_id'] == run_id
-		assert 'start_time' in start_call[0][1]
+		assert 'started_at' in start_call[0][1]
 
 	# 3. Verify End Event and Edge Event were emitted on exit
 	assert mock_tracker.enqueue.call_count == 3
@@ -48,13 +48,13 @@ def test_trace_lifecycle_success(mock_tracker):
 	end_call = mock_tracker.enqueue.call_args_list[1]
 	assert end_call[0][0] == 'lineage_run'
 	assert end_call[0][1]['success'] is True
-	assert 'end_time' in end_call[0][1]
+	assert 'end_at' in end_call[0][1]
 
 	# Edge Event
 	edge_call = mock_tracker.enqueue.call_args_list[2]
 	assert edge_call[0][0] == 'lineage_event'
-	assert edge_call[0][1]['input_urns'] == inputs
-	assert edge_call[0][1]['output_urns'] == outputs
+	assert edge_call[0][1]['inputs'] == inputs
+	assert edge_call[0][1]['outputs'] == outputs
 
 
 def test_trace_lifecycle_failure(mock_tracker):
