@@ -4,6 +4,7 @@ import time
 
 import httpx
 from ambyte_schemas.models.common import SensitivityLevel
+from ambyte_schemas.models.inventory import ResourceCreate
 from ambyte_schemas.models.obligation import (
 	EnforcementLevel,
 	GeofencingRule,
@@ -12,7 +13,6 @@ from ambyte_schemas.models.obligation import (
 	SourceProvenance,
 )
 from dotenv import load_dotenv
-from src.schemas.inventory import ResourceCreate
 
 load_dotenv()  # Load from .env if present
 
