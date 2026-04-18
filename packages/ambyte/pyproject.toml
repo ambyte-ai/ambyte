@@ -3,7 +3,7 @@ name = "ambyte"
 version = "0.1.0"
 description = "Policy as Code for Data & AI"
 authors = [{ name = "Enzo Biondo", email = "enzobiondo11@outlook.com" }]
-readme = "../../README.md"
+readme = "README.md"
 requires-python = ">=3.11"
 
 # Core dependencies installed with `pip install ambyte`
