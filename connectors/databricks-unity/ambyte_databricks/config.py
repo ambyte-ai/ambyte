@@ -180,5 +180,4 @@ def __getattr__(name: str):
 	"""Allow `from ambyte_databricks.config import settings` to resolve lazily."""
 	if name == 'settings':
 		return get_settings()
-	raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
+	raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
