@@ -22,4 +22,4 @@ build-backend = "hatchling.build"
 
 # Crucial: Tells hatchling not to look for a source folder
 [tool.hatch.build.targets.wheel]
-packages = []
+packages = ["ambyte"]
