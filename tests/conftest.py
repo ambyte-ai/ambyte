@@ -261,15 +261,14 @@ def mock_env_vars():
 		'AMBYTE_DATABRICKS_GOVERNANCE_SCHEMA': 'ambyte_gov',
 	}
 	with patch.dict(os.environ, env_vars):
-		# We need to reload config if it was already imported,
-		# or we patch the singleton in the test files.
-		# Ideally, we patch the settings object instance.
 		from ambyte_databricks import config
 
-		# Force re-validation/loading if needed, though Pydantic BaseSettings
-		# usually loads once. We can manually update the singleton for tests.
-		config.settings = config.Settings()
+		# Reset and recreate the lazy singleton with test env vars
+		config.reset_settings()
+		config._settings = config.Settings()
 		yield
+		# Clean up: reset the singleton so it doesn't leak between tests
+		config.reset_settings()
 
 
 # ==============================================================================

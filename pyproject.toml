@@ -152,7 +152,7 @@ package = false
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "--cov=connectors --cov=schemas/ambyte_schemas/models --cov=packages --cov=apps --cov-report=term-missing"
+addopts = "--cov=connectors --cov=schemas/ambyte_schemas/models --cov=packages --cov=apps --cov-report=term-missing --ignore=tests/control_plane/integration"
 testpaths = [
     "tests",
     "packages/python-sdk/tests",

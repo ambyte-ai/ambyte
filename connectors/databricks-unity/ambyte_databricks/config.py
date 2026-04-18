@@ -156,5 +156,29 @@ class Settings(BaseSettings):
 		return self.API_KEY.get_secret_value() if self.API_KEY else ''
 
 
-# Singleton instance
-settings = Settings()  # type: ignore[reportCallIssue] — required fields loaded from env vars
+# Lazy singleton — avoids crash at import time when env vars are not set (e.g., CI, tests).
+# Use get_settings() in application code, or `from ambyte_databricks.config import settings`
+# which resolves lazily via __getattr__.
+_settings: Settings | None = None
+
+
+def get_settings() -> Settings:
+	"""Returns the cached Settings singleton, creating it on first call."""
+	global _settings
+	if _settings is None:
+		_settings = Settings()  # type: ignore[reportCallIssue]
+	return _settings
+
+
+def reset_settings() -> None:
+	"""Clears the cached singleton (useful for tests)."""
+	global _settings
+	_settings = None
+
+
+def __getattr__(name: str):
+	"""Allow `from ambyte_databricks.config import settings` to resolve lazily."""
+	if name == 'settings':
+		return get_settings()
+	raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
