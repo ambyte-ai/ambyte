@@ -9,6 +9,7 @@ from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 _runtime_version.ValidateProtobufRuntimeVersion(
     _runtime_version.Domain.PUBLIC,
     6,
@@ -22,8 +23,6 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from common.v1 import common_pb2 as common_dot_v1_dot_common__pb2
-from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18lineage/v1/lineage.proto\x12\nlineage.v1\x1a\x16\x63ommon/v1/common.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb4\x03\n\x03Run\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12+\n\x04type\x18\x02 \x01(\x0e\x32\x17.lineage.v1.Run.RunTypeR\x04type\x12\x33\n\x0ctriggered_by\x18\x03 \x01(\x0b\x32\x10.common.v1.ActorR\x0btriggeredBy\x12\x39\n\nstart_time\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tstartTime\x12\x35\n\x08\x65nd_time\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x07\x65ndTime\x12\x18\n\x07success\x18\x06 \x01(\x08R\x07success\"\xae\x01\n\x07RunType\x12\x18\n\x14RUN_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n\x16RUN_TYPE_ETL_TRANSFORM\x10\x01\x12\x18\n\x14RUN_TYPE_AI_TRAINING\x10\x02\x12\x1b\n\x17RUN_TYPE_AI_FINE_TUNING\x10\x03\x12\x19\n\x15RUN_TYPE_AI_RAG_QUERY\x10\x04\x12\x1b\n\x17RUN_TYPE_HUMAN_DOWNLOAD\x10\x05\"e\n\x0cLineageEvent\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1d\n\ninput_urns\x18\x02 \x03(\tR\tinputUrns\x12\x1f\n\x0boutput_urns\x18\x03 \x03(\tR\noutputUrns\"\x9b\x03\n\rModelArtifact\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n\x03urn\x18\x02 \x01(\tR\x03urn\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n\x07version\x18\x04 \x01(\tR\x07version\x12\x42\n\nmodel_type\x18\x05 \x01(\x0e\x32#.lineage.v1.ModelArtifact.ModelTypeR\tmodelType\x12\x36\n\nrisk_level\x18\x06 \x01(\x0e\x32\x17.common.v1.RiskSeverityR\triskLevel\x12$\n\x0e\x62\x61se_model_urn\x18\x07 \x01(\tR\x0c\x62\x61seModelUrn\"\x97\x01\n\tModelType\x12\x1a\n\x16MODEL_TYPE_UNSPECIFIED\x10\x00\x12\x12\n\x0eMODEL_TYPE_LLM\x10\x01\x12\x1e\n\x1aMODEL_TYPE_COMPUTER_VISION\x10\x02\x12 \n\x1cMODEL_TYPE_TABULAR_REGRESSOR\x10\x03\x12\x18\n\x14MODEL_TYPE_EMBEDDING\x10\x04\x42\xb1\x01\n\x0e\x63om.lineage.v1B\x0cLineageProtoP\x01ZHgithub.com/ambyte-ai/ambyte-platform/schemas/gen/go/lineage/v1;lineagev1\xa2\x02\x03LXX\xaa\x02\nLineage.V1\xca\x02\nLineage\\V1\xe2\x02\x16Lineage\\V1\\GPBMetadata\xea\x02\x0bLineage::V1b\x06proto3')

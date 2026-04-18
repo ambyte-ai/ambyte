@@ -147,7 +147,7 @@ class ObligationLoader:
 			# Create a readable summary of Pydantic validation errors
 			error_details = []
 			for err in e.errors():
-				loc = ' -> '.join(str(l) for l in err['loc'])
+				loc = ' -> '.join(str(part) for part in err['loc'])
 				error_details.append(f'[{loc}]: {err["msg"]}')
 
 			raise PolicyLoaderError(f'Schema Validation Failed: {"; ".join(error_details)}') from None

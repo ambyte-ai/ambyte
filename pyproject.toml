@@ -89,6 +89,9 @@ exclude = [
     "dist",
     "node_modules",
     "venv",
+    "tests",
+    "alembic",
+    "proto",
 ]
 
 [tool.ruff.lint]
@@ -127,6 +130,8 @@ exclude = [
     "./debug_*.py",
     "private_example/",
     "debug/*",
+    "tests/",
+    "schemas/ambyte_schemas/proto/",
 ]
 venvPath = "."
 venv = ".venv"

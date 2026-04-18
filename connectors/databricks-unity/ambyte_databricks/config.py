@@ -157,4 +157,4 @@ class Settings(BaseSettings):
 
 
 # Singleton instance
-settings = Settings()
+settings = Settings()  # type: ignore[reportCallIssue] — required fields loaded from env vars

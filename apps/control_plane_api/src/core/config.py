@@ -122,8 +122,8 @@ class Settings(BaseSettings):
 	# ==========================================================================
 	# Optional: Used to create the first admin user in dev environments
 	FIRST_SUPERUSER: str = 'admin@ambyte.ai'
-	FIRST_SUPERUSER_PASSWORD: str = 'changethis'
+	FIRST_SUPERUSER_PASSWORD: str = 'changethis'  # noqa: S105 — dev default, overridden via env var
 
 
 # Singleton instance
-settings = Settings()
+settings = Settings()  # type: ignore[reportCallIssue] — required fields loaded from env vars

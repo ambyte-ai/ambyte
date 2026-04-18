@@ -9,6 +9,7 @@ from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 _runtime_version.ValidateProtobufRuntimeVersion(
     _runtime_version.Domain.PUBLIC,
     6,
@@ -22,9 +23,6 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from common.v1 import common_pb2 as common_dot_v1_dot_common__pb2
-from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
-from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14\x61udit/v1/audit.proto\x12\x08\x61udit.v1\x1a\x16\x63ommon/v1/common.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x99\x03\n\rAuditLogEntry\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x38\n\ttimestamp\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\ttimestamp\x12&\n\x05\x61\x63tor\x18\x03 \x01(\x0b\x32\x10.common.v1.ActorR\x05\x61\x63tor\x12!\n\x0cresource_urn\x18\x04 \x01(\tR\x0bresourceUrn\x12\x16\n\x06\x61\x63tion\x18\x05 \x01(\tR\x06\x61\x63tion\x12.\n\x08\x64\x65\x63ision\x18\x06 \x01(\x0e\x32\x12.audit.v1.DecisionR\x08\x64\x65\x63ision\x12J\n\x10\x65valuation_trace\x18\x07 \x01(\x0b\x32\x1f.audit.v1.PolicyEvaluationTraceR\x0f\x65valuationTrace\x12@\n\x0frequest_context\x18\x08 \x01(\x0b\x32\x17.google.protobuf.StructR\x0erequestContext\x12\x1d\n\nentry_hash\x18\t \x01(\tR\tentryHash\"\xcb\x01\n\x15PolicyEvaluationTrace\x12%\n\x0ereason_summary\x18\x01 \x01(\tR\rreasonSummary\x12>\n\x1b\x63ontributing_obligation_ids\x18\x02 \x03(\tR\x19\x63ontributingObligationIds\x12.\n\x13policy_version_hash\x18\x03 \x01(\tR\x11policyVersionHash\x12\x1b\n\tcache_hit\x18\x04 \x01(\x08R\x08\x63\x61\x63heHit\"\xd3\x02\n\x10\x41uditBlockHeader\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12%\n\x0esequence_index\x18\x02 \x01(\x04R\rsequenceIndex\x12&\n\x0fprev_block_hash\x18\x03 \x01(\tR\rprevBlockHash\x12\x1f\n\x0bmerkle_root\x18\x04 \x01(\tR\nmerkleRoot\x12\x43\n\x0ftimestamp_start\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x0etimestampStart\x12?\n\rtimestamp_end\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x0ctimestampEnd\x12\x1b\n\tlog_count\x18\x07 \x01(\x04R\x08logCount\x12\x1c\n\tsignature\x18\x08 \x01(\x0cR\tsignature\"\xa3\x01\n\nAuditProof\x12-\n\x05\x65ntry\x18\x01 \x01(\x0b\x32\x17.audit.v1.AuditLogEntryR\x05\x65ntry\x12=\n\x0c\x62lock_header\x18\x02 \x01(\x0b\x32\x1a.audit.v1.AuditBlockHeaderR\x0b\x62lockHeader\x12\'\n\x0fmerkle_siblings\x18\x03 \x03(\tR\x0emerkleSiblings*f\n\x08\x44\x65\x63ision\x12\x18\n\x14\x44\x45\x43ISION_UNSPECIFIED\x10\x00\x12\x12\n\x0e\x44\x45\x43ISION_ALLOW\x10\x01\x12\x11\n\rDECISION_DENY\x10\x02\x12\x19\n\x15\x44\x45\x43ISION_DRY_RUN_DENY\x10\x03\x42\xa1\x01\n\x0c\x63om.audit.v1B\nAuditProtoP\x01ZDgithub.com/ambyte-ai/ambyte-platform/schemas/gen/go/audit/v1;auditv1\xa2\x02\x03\x41XX\xaa\x02\x08\x41udit.V1\xca\x02\x08\x41udit\\V1\xe2\x02\x14\x41udit\\V1\\GPBMetadata\xea\x02\tAudit::V1b\x06proto3')

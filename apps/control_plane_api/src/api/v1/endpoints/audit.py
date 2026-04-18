@@ -38,7 +38,7 @@ async def get_public_key():
 	Users can use this key in the CLI (`ambyte audit verify`) to mathematically
 	prove that their audit logs have not been tampered with.
 	"""
-	return {'public_key': 'dc68558900e06e39af21ac542ec6819c99f997114b028ef3024833ef5ccf158b'}
+	return {'public_key': 'ADD_YOUR_PUBLIC_KEY_HERE'}
 
 
 @router.post(

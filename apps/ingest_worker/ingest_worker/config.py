@@ -134,4 +134,4 @@ class Settings(BaseSettings):
 
 
 # Singleton Accessor
-settings = Settings()
+settings = Settings()  # type: ignore[reportCallIssue] — required fields loaded from env vars
