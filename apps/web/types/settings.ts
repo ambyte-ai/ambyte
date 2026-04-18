@@ -5,18 +5,18 @@
 export type ProjectRole = "owner" | "admin" | "editor" | "viewer";
 
 export interface ProjectMember {
-    id: string;
-    user_id: string;
-    email: string;
-    full_name: string | null;
-    role: ProjectRole;
-    joined_at: string; // ISO 8601 Date string
+	id: string;
+	user_id: string;
+	email: string;
+	full_name: string | null;
+	role: ProjectRole;
+	joined_at: string; // ISO 8601 Date string
 }
 
 // Payload for POST /v1/projects/{project_id}/members
 export interface AddMemberPayload {
-    email: string;
-    role: ProjectRole;
+	email: string;
+	role: ProjectRole;
 }
 
 // =============================================================================
@@ -24,26 +24,26 @@ export interface AddMemberPayload {
 // =============================================================================
 
 export interface ApiKey {
-    id: string;
-    name: string;
-    prefix: string; // e.g., "sk_live_a1b2..."
-    scopes: string[];
-    created_at: string; // ISO 8601 Date string
-    last_used_at: string | null; // ISO 8601 Date string
-    expires_at: string | null; // ISO 8601 Date string
+	id: string;
+	name: string;
+	prefix: string; // e.g., "sk_live_a1b2..."
+	scopes: string[];
+	created_at: string; // ISO 8601 Date string
+	last_used_at: string | null; // ISO 8601 Date string
+	expires_at: string | null; // ISO 8601 Date string
 }
 
 // Returned only once immediately after creation
 export interface ApiKeySecret {
-    key: string; // The raw unhashed token (e.g. sk_live_xyz123)
-    info: ApiKey;
+	key: string; // The raw unhashed token (e.g. sk_live_xyz123)
+	info: ApiKey;
 }
 
 // Payload for POST /v1/projects/{project_id}/keys
 export interface CreateApiKeyPayload {
-    name: string;
-    scopes: string[];
-    expires_at?: string | null; // ISO 8601 Date string or null
+	name: string;
+	scopes: string[];
+	expires_at?: string | null; // ISO 8601 Date string or null
 }
 
 // =============================================================================
@@ -51,7 +51,7 @@ export interface CreateApiKeyPayload {
 // =============================================================================
 
 export interface PublicKeyResponse {
-    public_key: string;
+	public_key: string;
 }
 
 // =============================================================================
@@ -59,5 +59,5 @@ export interface PublicKeyResponse {
 // =============================================================================
 
 export interface ProjectUpdatePayload {
-    name: string;
+	name: string;
 }
