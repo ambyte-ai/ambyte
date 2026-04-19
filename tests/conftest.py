@@ -1,4 +1,23 @@
 import os
+
+# ==============================================================================
+# TEST COLLECTION ENVIRONMENT VARIABLES
+# ==============================================================================
+# We must set these before pytest collects the test files to prevent Pydantic 
+# from throwing ValidationErrors when files import `settings` at the module level.
+_TEST_ENV_VARS = {
+	'AMBYTE_DATABRICKS_HOST': 'https://test.databricks.com',
+	'AMBYTE_DATABRICKS_TOKEN': 'dapi_test_token',
+	'AMBYTE_DATABRICKS_WAREHOUSE_ID': 'wh_123456789',
+	'AMBYTE_API_KEY': 'sk_test_mock_key',
+	'AMBYTE_DATABRICKS_CONTROL_PLANE_URL': 'http://mock-api.ambyte.local',
+	'AMBYTE_DATABRICKS_LOCAL_MODE': 'false',
+	'AMBYTE_DATABRICKS_GOVERNANCE_CATALOG': 'main',
+	'AMBYTE_DATABRICKS_GOVERNANCE_SCHEMA': 'ambyte_gov',
+}
+for k, v in _TEST_ENV_VARS.items():
+	os.environ.setdefault(k, v)
+
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
