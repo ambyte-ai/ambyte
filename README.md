@@ -8,7 +8,7 @@
 
 <div align="center">
   <a href="https://github.com/ambyte-ai/ambyte"><img src="https://img.shields.io/github/stars/ambyte-ai/ambyte?style=for-the-badge&color=indigo" alt="Github Stars"></a>
-  <a href="https://pypi.org/project/ambyte-sdk"><img src="https://img.shields.io/pypi/v/ambyte?style=for-the-badge&color=emerald" alt="PyPI"></a>
+  <a href="https://pypi.org/project/ambyte"><img src="https://img.shields.io/pypi/v/ambyte?style=for-the-badge&color=emerald" alt="PyPI"></a>
   <a href="https://hub.docker.com/u/ambyte"><img src="https://img.shields.io/badge/docker-ready-blue?style=for-the-badge&logo=docker" alt="Docker"></a>
 </div>
 
