@@ -1,160 +1,160 @@
 name: CI/CD Pipeline
 
 on:
-    push:
-        branches: ["master"]
-        # Triggers the publish job when you push a tag like "v0.1.0"
-        tags: ["v*.*.*"]
-    pull_request:
-        branches: ["master"]
+  push:
+    branches: [ "master" ]
+    # Triggers the publish job when you push a tag like "v0.1.0"
+    tags: [ "v*.*.*" ]
+  pull_request:
+    branches: [ "master" ]
 
 jobs:
-    # ============================================================================
-    # 1. CODE QUALITY (Formatting, Linting, Type Checking)
-    # ============================================================================
-    quality:
-        name: Code Quality (Ruff & Pyright)
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  # ============================================================================
+  # 1. CODE QUALITY (Formatting, Linting, Type Checking)
+  # ============================================================================
+  quality:
+    name: Code Quality (Ruff & Pyright)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v5
-              with:
-                  enable-cache: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
-            - name: Set up Python 3.11
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.11"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-            - name: Install dependencies
-              run: uv sync --frozen --all-extras --dev
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
 
-            - name: Check formatting (Ruff)
-              run: uv run ruff format --check .
+      - name: Check formatting (Ruff)
+        run: uv run ruff format --check .
 
-            - name: Lint code (Ruff)
-              run: uv run ruff check .
+      - name: Lint code (Ruff)
+        run: uv run ruff check .
 
-            - name: Type checking (Pyright)
-              run: uv run pyright
+      - name: Type checking (Pyright)
+        run: uv run pyright
 
-    # ============================================================================
-    # 2. TESTING
-    # ============================================================================
-    test:
-        name: Unit & Integration Tests
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  # ============================================================================
+  # 2. TESTING
+  # ============================================================================
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Install system dependencies (For Ingest Worker/Unstructured)
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y libmagic-dev poppler-utils tesseract-ocr libgl1
+      - name: Install system dependencies (For Ingest Worker/Unstructured)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic-dev poppler-utils tesseract-ocr libgl1
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v5
-              with:
-                  enable-cache: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
-            - name: Set up Python 3.11
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.11"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-            - name: Install dependencies
-              run: uv sync --frozen --all-extras --dev
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
 
-            - name: Run Pytest
-              run: uv run pytest
+      - name: Run Pytest
+        run: uv run pytest
 
-    # ============================================================================
-    # 3. FRONTEND BUILD (Ensure Next.js app compiles)
-    # ============================================================================
-    web-build:
-        name: Build Next.js Dashboard
-        runs-on: ubuntu-latest
-        defaults:
-            run:
-                working-directory: ./apps/web
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  # ============================================================================
+  # 3. FRONTEND BUILD (Ensure Next.js app compiles)
+  # ============================================================================
+  web-build:
+    name: Build Next.js Dashboard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/web
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "20"
-                  cache: "npm"
-                  cache-dependency-path: "./apps/web/package.json"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "./apps/web/package.json"
 
-            - name: Install dependencies
-              run: npm install
+      - name: Install dependencies
+        run: npm install
 
-            - name: Build Web App
-              # Provide dummy env vars to allow the Next.js build to succeed
-              env:
-                  NEXT_PUBLIC_API_URL: "http://localhost:8000/v1"
-                  NEXT_PUBLIC_INGEST_API_URL: "http://localhost:8001"
-                  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_dummy"
-              run: npm run build
+      - name: Build Web App
+        # Provide dummy env vars to allow the Next.js build to succeed
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:8000/v1"
+          NEXT_PUBLIC_INGEST_API_URL: "http://localhost:8001"
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk"
+        run: npm run build
 
-    # ============================================================================
-    # 4. PUBLISH TO PYPI
-    # ============================================================================
-    publish-pypi:
-        name: Build and Publish PyPI Packages
-        # Only run this job if the previous jobs passed AND we just pushed a version tag (e.g., v0.1.0)
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        needs: [quality, test, web-build]
-        runs-on: ubuntu-latest
-        environment: pypi-publish
-        permissions:
-            id-token: write # IMPORTANT: Required for PyPI OIDC Trusted Publishing
-            contents: read
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  # ============================================================================
+  # 4. PUBLISH TO PYPI
+  # ============================================================================
+  publish-pypi:
+    name: Build and Publish PyPI Packages
+    # Only run this job if the previous jobs passed AND we just pushed a version tag (e.g., v0.1.0)
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [ quality, test, web-build ]
+    runs-on: ubuntu-latest
+    environment: pypi-publish
+    permissions:
+      id-token: write # IMPORTANT: Required for PyPI OIDC Trusted Publishing
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-            - name: Set up Python 3.11
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.11"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-            - name: Build all publishable packages
-              # uv build automatically resolves `workspace = true` to standard PyPI
-              # requirements based on the version defined in your pyproject.toml
-              run: |
-                  uv build --package ambyte-schemas
-                  uv build --package ambyte-rules
-                  uv build --package ambyte-sdk
-                  uv build --package ambyte-databricks
-                  uv build --package ambyte-compiler
-                  uv build --package ambyte-cli
-                  uv build --package ambyte
+      - name: Build all publishable packages
+        # uv build automatically resolves `workspace = true` to standard PyPI
+        # requirements based on the version defined in your pyproject.toml
+        run: |
+          uv build --package ambyte-schemas
+          uv build --package ambyte-rules
+          uv build --package ambyte-sdk
+          uv build --package ambyte-databricks
+          uv build --package ambyte-compiler
+          uv build --package ambyte-cli
+          uv build --package ambyte
 
-            - name: Collect distributions
-              # Move all built wheels/sdists from their respective subdirectories into a central dist/ folder
-              run: |
-                  mkdir -p dist
-                  cp schemas/dist/* dist/
-                  cp packages/rules-engine/dist/* dist/
-                  cp packages/python-sdk/dist/* dist/
-                  cp connectors/databricks-unity/dist/* dist/
-                  cp apps/policy_compiler/dist/* dist/
-                  cp apps/cli/dist/* dist/
-                  cp packages/ambyte/dist/* dist/
+      - name: Collect distributions
+        # Move all built wheels/sdists from their respective subdirectories into a central dist/ folder
+        run: |
+          mkdir -p dist
+          cp schemas/dist/* dist/
+          cp packages/rules-engine/dist/* dist/
+          cp packages/python-sdk/dist/* dist/
+          cp connectors/databricks-unity/dist/* dist/
+          cp apps/policy_compiler/dist/* dist/
+          cp apps/cli/dist/* dist/
+          cp packages/ambyte/dist/* dist/
 
-            - name: Publish to PyPI
-              # This official action leverages the `id-token` permission above to authenticate securely
-              # without you needing to manage passwords. It uploads all files in `dist/` simultaneously.
-              uses: pypa/gh-action-pypi-publish@release/v1
-              with:
-                  packages-dir: dist/
+      - name: Publish to PyPI
+        # This official action leverages the `id-token` permission above to authenticate securely
+        # without you needing to manage passwords. It uploads all files in `dist/` simultaneously.
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
