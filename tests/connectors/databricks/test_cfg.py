@@ -61,7 +61,7 @@ def test_settings_list_parsing_overrides():
 	# We provide JSON arrays here to pass the EnvSettingsSource parsing.
 	env_overrides = {
 		'AMBYTE_DATABRICKS_HOST': 'https://test.databricks.com',
-		'AMBYTE_DATABRICKS_API_KEY': 'sk_key',
+		'AMBYTE_API_KEY': 'sk_key',
 		'AMBYTE_DATABRICKS_INCLUDE_CATALOGS': '["sales", "marketing"]',
 		'AMBYTE_DATABRICKS_EXCLUDE_SCHEMAS': '["temp_*", "garbage"]',
 	}
