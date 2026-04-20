@@ -4,7 +4,7 @@ services:
   # ============================================================================
   api:
     build:
-      context: ../../  # Points to repo root
+      context: .  # Points to repo root
       dockerfile: apps/control_plane_api/Dockerfile
     container_name: ambyte-api
     restart: always
@@ -34,7 +34,7 @@ services:
   # ============================================================================
   audit-worker:
     build:
-      context: ../../
+      context: .
       dockerfile: apps/audit-log/Dockerfile
     container_name: ambyte-audit-worker
     restart: always
@@ -61,7 +61,7 @@ services:
   # ============================================================================
   ingest-api:
     build:
-      context: ../../ # Points to repo root to capture shared schemas/packages
+      context: . # Points to repo root to capture shared schemas/packages
       dockerfile: apps/ingest_worker/Dockerfile
       no_cache: true
     container_name: ambyte-ingest-api
@@ -95,7 +95,7 @@ services:
   # ============================================================================
   ingest-worker:
     build:
-      context: ../../
+      context: .
       dockerfile: apps/ingest_worker/Dockerfile
     container_name: ambyte-ingest-worker
     restart: always
@@ -206,7 +206,7 @@ services:
   # ============================================================================
   web:
     build:
-      context: ../../apps/web
+      context: apps/web
       dockerfile: Dockerfile
       args:
         # Pass variables required at BUILD TIME for the browser bundle
@@ -218,7 +218,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - ../../.env
+      - .env
     environment:
       - NODE_ENV=production
       # Runtime secrets (not baked into browser bundle)
