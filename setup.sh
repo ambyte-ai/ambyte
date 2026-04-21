@@ -28,7 +28,6 @@ from cryptography.hazmat.primitives import serialization
 
 # 1. Generate keys
 secret_key = secrets.token_urlsafe(32)
-ingest_worker_key = f'sk_ingest_{secrets.token_hex(16)}'
 
 priv = ed25519.Ed25519PrivateKey.generate()
 priv_hex = priv.private_bytes(
@@ -56,7 +55,6 @@ def set_env(key, value, text):
 
 # 3. Inject new keys
 content = set_env('SECRET_KEY', secret_key, content)
-content = set_env('INGEST_WORKER_API_KEY', ingest_worker_key, content)
 content = set_env('AMBYTE_AUDIT_SYSTEM_PRIVATE_KEY', priv_hex, content)
 content = set_env('AMBYTE_SYSTEM_PUBLIC_KEY', pub_hex, content)
 
@@ -66,9 +64,15 @@ with open('.env', 'w', encoding='utf-8') as f:
 
 print(f'''✅ Keys generated and securely injected into .env:
    - SECRET_KEY
-   - INGEST_WORKER_API_KEY
    - AMBYTE_AUDIT_SYSTEM_PRIVATE_KEY
    - AMBYTE_SYSTEM_PUBLIC_KEY: {pub_hex}
+
+⚠️  IMPORTANT: The INGEST_WORKER_API_KEY requires database initialization.
+After running 'docker compose up -d' and waiting for the DB to be ready, 
+you must run:
+  uv run python apps/control_plane_api/src/scripts/init_db.py
+
+This will create your Admin and Ingest API keys. Copy them and place them in your .env file!
 ''')
 "
 
