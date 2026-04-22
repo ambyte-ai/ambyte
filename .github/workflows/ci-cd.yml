@@ -140,18 +140,6 @@ jobs:
           uv build --package ambyte-cli
           uv build --package ambyte
 
-      - name: Collect distributions
-        # Move all built wheels/sdists from their respective subdirectories into a central dist/ folder
-        run: |
-          mkdir -p dist
-          cp schemas/dist/* dist/
-          cp packages/rules-engine/dist/* dist/
-          cp packages/python-sdk/dist/* dist/
-          cp connectors/databricks-unity/dist/* dist/
-          cp apps/policy_compiler/dist/* dist/
-          cp apps/cli/dist/* dist/
-          cp packages/ambyte/dist/* dist/
-
       - name: Publish to PyPI
         # This official action leverages the `id-token` permission above to authenticate securely
         # without you needing to manage passwords. It uploads all files in `dist/` simultaneously.

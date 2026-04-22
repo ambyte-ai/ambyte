@@ -21,9 +21,6 @@ jobs:
                     - name: ambyte-ingest
                       context: .
                       dockerfile: apps/ingest_worker/Dockerfile
-                    - name: ambyte-web
-                      context: apps/web
-                      dockerfile: apps/web/Dockerfile
 
         steps:
             - name: Checkout code
@@ -63,10 +60,3 @@ jobs:
                       }}:buildcache
                   cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name
                       }}:buildcache,mode=max
-                  # Required for Next.js build-time variables. 
-                  # Note: In a real public image, users might need to rebuild the web UI 
-                  # to bake in their own Clerk keys.
-                  build-args: |
-                      NEXT_PUBLIC_API_URL=http://localhost:8000/v1
-                      NEXT_PUBLIC_INGEST_API_URL=http://localhost:8001
-                      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_dummy_key_replace_me
