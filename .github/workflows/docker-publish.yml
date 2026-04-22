@@ -1,0 +1,72 @@
+name: Publish Docker Images
+
+on:
+    push:
+        tags: [ "v*.*.*" ] # Triggers on tags like v0.1.0
+
+jobs:
+    build-and-push:
+        name: Build and Push to Docker Hub
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                include:
+                    - name: ambyte-api
+                      context: .
+                      dockerfile: apps/control_plane_api/Dockerfile
+                    - name: ambyte-audit-worker
+                      context: .
+                      dockerfile: apps/audit-log/Dockerfile
+                    - name: ambyte-ingest
+                      context: .
+                      dockerfile: apps/ingest_worker/Dockerfile
+                    - name: ambyte-web
+                      context: apps/web
+                      dockerfile: apps/web/Dockerfile
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v3
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Login to Docker Hub
+              uses: docker/login-action@v3
+              with:
+                  username: ${{ secrets.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+            - name: Extract Docker metadata
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}
+                  tags: |
+                      type=semver,pattern={{version}}
+                      type=semver,pattern={{major}}.{{minor}}
+                      type=raw,value=latest,enable={{is_default_branch}}
+
+            - name: Build and push
+              uses: docker/build-push-action@v5
+              with:
+                  context: ${{ matrix.context }}
+                  file: ${{ matrix.dockerfile }}
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name
+                      }}:buildcache
+                  cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name
+                      }}:buildcache,mode=max
+                  # Required for Next.js build-time variables. 
+                  # Note: In a real public image, users might need to rebuild the web UI 
+                  # to bake in their own Clerk keys.
+                  build-args: |
+                      NEXT_PUBLIC_API_URL=http://localhost:8000/v1
+                      NEXT_PUBLIC_INGEST_API_URL=http://localhost:8001
+                      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_dummy_key_replace_me
