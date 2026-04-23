@@ -31,7 +31,7 @@ Ambyte is designed to run entirely within your VPC. The easiest way to deploy it
 - A free account on [Clerk.com](https://clerk.com) (for Authentication)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ambyte-ai/ambyte/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ambyte-ai/ambyte/master/install.sh | bash
 ```
 
 ### Install the CLI & SDK
