@@ -30,8 +30,14 @@ Ambyte is designed to run entirely within your VPC. The easiest way to deploy it
 - Docker & Docker Compose
 - A free account on [Clerk.com](https://clerk.com) (for Authentication)
 
+> On MacOS/Linux/WSL:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ambyte-ai/ambyte/master/install.sh | bash
+```
+
+> On Windows:
+```powershell
+irm https://raw.githubusercontent.com/ambyte-ai/ambyte/master/install.ps1 | iex
 ```
 
 ### Install the CLI & SDK
