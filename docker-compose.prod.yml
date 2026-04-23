@@ -24,6 +24,9 @@ services:
       - .env
     environment:
       - POSTGRES_SERVER=db
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-ambyte}
       - REDIS_HOST=redis
     depends_on:
       db:
@@ -54,6 +57,9 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      # Wait for API to run Alembic migrations first
+      api:
+        condition: service_started
     networks:
       - ambyte-net
     logging: *default-logging
@@ -129,7 +135,7 @@ services:
     logging: *default-logging
 
   # ============================================================================
-  # INFRASTRUCTURE / DATABASES (Not exposed to host for security)
+  # INFRASTRUCTURE / DATABASES
   # ============================================================================
   db:
     image: postgres:15-alpine
@@ -174,8 +180,14 @@ services:
     image: minio/minio:latest
     container_name: ambyte-minio
     restart: unless-stopped
+    ports:
+      - "9000:9000" # REQUIRED: UI browser directly requests PDFs from localhost:9000
     env_file:
       - .env
+    environment:
+      # Map .env AWS keys to MinIO's required auth variables
+      - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY:-minioadmin}
     volumes:
       - ambyte_minio_data:/data
     networks:
