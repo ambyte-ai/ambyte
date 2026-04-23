@@ -24,41 +24,22 @@ If you want enterprise-grade data governance, cryptographically sealed audit log
 
 # 🚀 Quickstart
 
-Ambyte is designed to run entirely within your VPC. The easiest way to start is using Docker Compose to spin up the Control Plane, and our CLI to interact with it.
+Ambyte is designed to run entirely within your VPC. The easiest way to deploy it is using our unified installation script.
 
-### 1. Spin up the Control Plane (Backend, UI, Database, Vector Store)
-
-> You need to configure your Clerk Auth to access the local UI:
-```
-# API Endpoints (Point to your local docker-compose services)
-NEXT_PUBLIC_API_URL=http://localhost:8000/v1
-NEXT_PUBLIC_INGEST_API_URL=http://localhost:8001
-
-# Clerk Next.js Authentication Keys
-# Get from: https://dashboard.clerk.com -> API Keys
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_publishable_key
-CLERK_SECRET_KEY=sk_test_your_secret_key
-```
-
-Check the `.env.example` file for more information on all environment variables needed for the dashboard.
+**Requirements:**
+- Docker & Docker Compose
+- A free account on [Clerk.com](https://clerk.com) (for Authentication)
 
 ```bash
-git clone https://github.com/ambyte-ai/ambyte.git
-cd ambyte
-
-# Boot the platform (Control Plane API, Next.js Dashboard, Postgres, Redis, Qdrant)
-docker compose up -d
-
-# Initialize the database and get your Root API Key
-docker compose exec api python src/scripts/init_db.py
+curl -fsSL https://raw.githubusercontent.com/ambyte-ai/ambyte/main/install.sh | bash
 ```
 
-### 2. Install the CLI & SDK
+### Install the CLI & SDK
 ```bash
 pip install ambyte
 ```
 
-### 3. Connect your Workspace
+### Connect your Workspace
 ```bash
 ambyte login  # Paste your generated Root API Key
 ambyte init   # Scaffold your local policy workspace
