@@ -337,8 +337,6 @@ def _build_opa(compiler: PolicyCompilerService, resources: list[dict], obligatio
 	"""
 	console.print('  • Generating [bold]OPA Bundle[/bold]...', end='')
 
-	from ambyte_cli.config import get_workspace_root
-
 	master_bundle = {}
 
 	for res in resources:
@@ -351,10 +349,9 @@ def _build_opa(compiler: PolicyCompilerService, resources: list[dict], obligatio
 
 	try:
 		# Wrap in a root key for cleaner Rego lookup: data.ambyte.policies[urn]
-		# or just policies, matching the backend structure
 		wrapped_data = {'ambyte': {'policies': master_bundle}}
 
-		rego_dir = get_workspace_root() / 'policy-library' / 'rego'
+		rego_dir = _get_rego_path()
 		tarball_bytes = compiler.build_opa_tarball(wrapped_data, rego_dir=rego_dir)
 
 		out_file = out_dir / 'opa_bundle.tar.gz'
@@ -460,6 +457,53 @@ def _get_template_path() -> Path:
 		pass
 
 	return Path('policy-library/sql_templates')
+
+
+def _get_rego_path() -> Path:
+	"""
+	Locates the Rego policy files directory.
+
+	Resolution order:
+	1. Dev/Monorepo: Traverses up from this file to find the repo root.
+	2. User Workspace: Checks for a 'rego/' dir in the user's project.
+	3. Installed Package: Checks if rego files are bundled inside ambyte_cli.
+	4. Fallback: Returns a relative path (will likely warn at tarball time).
+	"""
+	from ambyte_cli.config import get_workspace_root
+
+	try:
+		root = get_workspace_root()
+
+		# 1. Dev/Monorepo path (Source-based resolution)
+		# Path: apps/cli/ambyte_cli/commands/core.py -> ../../../../.. -> repo_root
+		current_file = Path(__file__).resolve()
+		if len(current_file.parents) >= 5:
+			repo_root = current_file.parents[4]
+			candidate = repo_root / 'policy-library' / 'rego'
+			if candidate.exists():
+				return candidate
+
+		# 2. User Workspace path (scaffolded)
+		# A user might have their own rego/ directory in their project root
+		candidate = root / 'rego'
+		if candidate.exists():
+			return candidate
+
+		# 3. Installed package path (Pip Install)
+		# Checks if rego files are bundled inside ambyte_cli
+		spec = importlib.util.find_spec('ambyte_cli')
+		if spec and spec.origin:
+			package_root = Path(spec.origin).parent
+			# Standard bundling: ambyte_cli/rego/
+			candidate = package_root / 'rego'
+			if candidate.exists():
+				return candidate
+
+	except Exception:
+		logger.warning('Failed to locate rego path, falling back to default.', exc_info=True)
+		pass
+
+	return Path('policy-library/rego')
 
 
 # ==============================================================================

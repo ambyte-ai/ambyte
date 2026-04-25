@@ -45,7 +45,7 @@ deny contains msg if {
 	utils.is_eu_region(input.dataset.geo_region)
 
 	# 2. Trigger: The Actor (User/Service) or Destination is OUTSIDE the EU
-	target_region := get_target_region(input)
+	target_region := find_target_region(input)
 	not utils.is_eu_region(target_region)
 
 	# 3. Check: Is the destination on the Adequacy List?
