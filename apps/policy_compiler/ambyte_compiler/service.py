@@ -224,14 +224,14 @@ class PolicyCompilerService:
 
 	def build_opa_tarball(self, data: dict, rego_dir: Path | None = None) -> bytes:
 		"""
-		Packages the given data dictionary as data.json along with all .rego files 
+		Packages the given data dictionary as data.json along with all .rego files
 		into an in-memory tar.gz bundle.
 		"""
 		import io
 		import json
 		import logging
 		import tarfile
-		
+
 		logger = logging.getLogger(__name__)
 
 		if rego_dir is None:
@@ -241,7 +241,7 @@ class PolicyCompilerService:
 				rego_dir = Path('policy-library/rego')
 
 		data_bytes = json.dumps(data, indent=2, default=str).encode('utf-8')
-		
+
 		# Create in-memory tarball
 		bundle_io = io.BytesIO()
 		with tarfile.open(fileobj=bundle_io, mode='w:gz') as tar:
@@ -257,7 +257,7 @@ class PolicyCompilerService:
 						arcname = str(rego_file.relative_to(rego_dir))
 						tar.add(rego_file, arcname=arcname)
 			else:
-				logger.warning(f"Rego directory not found: {rego_dir}")
+				logger.warning(f'Rego directory not found: {rego_dir}')
 
 		return bundle_io.getvalue()
 

@@ -10,6 +10,7 @@ import {
 	UploadCloud,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +50,13 @@ export function Sidebar() {
 		<div className="flex h-full flex-col py-4">
 			{/* Logo Area */}
 			<div className="px-6 mb-8 flex items-center gap-2">
-				<div className="h-6 w-6 rounded bg-primary" /> {/* Placeholder Logo */}
+				<Image 
+					src="/ambyte-logo.png" 
+					alt="Ambyte Logo" 
+					width={24} 
+					height={24} 
+					className="rounded"
+				/>
 				<span className="text-lg font-bold tracking-tight">Ambyte</span>
 			</div>
 
@@ -86,7 +93,7 @@ export function Sidebar() {
 
 			{/* Footer / Version */}
 			<div className="px-6 py-4 border-t border-border/50">
-				<p className="text-xs text-muted-foreground font-mono">v0.1.0-alpha</p>
+				<p className="text-xs text-muted-foreground font-mono">{process.env.NEXT_PUBLIC_APP_VERSION || "v0.1.0"}</p>
 			</div>
 		</div>
 	);
