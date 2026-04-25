@@ -3,7 +3,6 @@ Core logic commands: resolve, build, and diff.
 """
 
 import importlib.util
-import json
 import logging
 import shutil
 import subprocess
@@ -334,10 +333,11 @@ def _build_snowflake(compiler: PolicyCompilerService, resources: list[dict], obl
 
 def _build_opa(compiler: PolicyCompilerService, resources: list[dict], obligations: list, out_dir: Path):
 	"""
-	Generates data.json for OPA.
-	Creates a dictionary of { "urn": { policy... } }
+	Generates opa_bundle.tar.gz containing data.json and .rego files.
 	"""
 	console.print('  • Generating [bold]OPA Bundle[/bold]...', end='')
+
+	from ambyte_cli.config import get_workspace_root
 
 	master_bundle = {}
 
@@ -349,10 +349,19 @@ def _build_opa(compiler: PolicyCompilerService, resources: list[dict], obligatio
 		except Exception as e:
 			logger.warning(f'Failed to compile OPA for {res["urn"]}: {e}')
 
-	out_file = out_dir / 'data.json'
-	with open(out_file, 'w', encoding='utf-8') as f:
+	try:
 		# Wrap in a root key for cleaner Rego lookup: data.ambyte.policies[urn]
-		json.dump({'policies': master_bundle}, f, indent=2, default=str)
+		# or just policies, matching the backend structure
+		wrapped_data = {'ambyte': {'policies': master_bundle}}
+
+		rego_dir = get_workspace_root() / 'policy-library' / 'rego'
+		tarball_bytes = compiler.build_opa_tarball(wrapped_data, rego_dir=rego_dir)
+
+		out_file = out_dir / 'opa_bundle.tar.gz'
+		with open(out_file, 'wb') as f:
+			f.write(tarball_bytes)
+	except Exception as e:
+		logger.warning(f'Failed to package OPA bundle: {e}')
 
 	console.print(' [green]Done[/green]')
 

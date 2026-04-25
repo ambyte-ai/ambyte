@@ -27,6 +27,7 @@ class PolicyCompilerService:
 	"""
 
 	def __init__(self, templates_path: Path | None = None):
+		self.templates_path = templates_path
 		# 1. The Brain (Logic)
 		self.rules_engine = ConflictResolutionEngine()
 		self.matcher = ResourceMatcher()
@@ -220,6 +221,45 @@ class PolicyCompilerService:
 
 	def _compile_opa(self, policy: ResolvedPolicy) -> dict:
 		return self.rego_gen.build_bundle_data(policy)
+
+	def build_opa_tarball(self, data: dict, rego_dir: Path | None = None) -> bytes:
+		"""
+		Packages the given data dictionary as data.json along with all .rego files 
+		into an in-memory tar.gz bundle.
+		"""
+		import io
+		import json
+		import logging
+		import tarfile
+		
+		logger = logging.getLogger(__name__)
+
+		if rego_dir is None:
+			if self.templates_path:
+				rego_dir = self.templates_path.parent / 'rego'
+			else:
+				rego_dir = Path('policy-library/rego')
+
+		data_bytes = json.dumps(data, indent=2, default=str).encode('utf-8')
+		
+		# Create in-memory tarball
+		bundle_io = io.BytesIO()
+		with tarfile.open(fileobj=bundle_io, mode='w:gz') as tar:
+			# Add data.json
+			data_info = tarfile.TarInfo(name='data.json')
+			data_info.size = len(data_bytes)
+			tar.addfile(data_info, io.BytesIO(data_bytes))
+
+			# Add rego files
+			if rego_dir.exists() and rego_dir.is_dir():
+				for rego_file in rego_dir.rglob('*.rego'):
+					if rego_file.is_file():
+						arcname = str(rego_file.relative_to(rego_dir))
+						tar.add(rego_file, arcname=arcname)
+			else:
+				logger.warning(f"Rego directory not found: {rego_dir}")
+
+		return bundle_io.getvalue()
 
 	def _compile_iam(self, policy: ResolvedPolicy, context: dict) -> str:
 		"""

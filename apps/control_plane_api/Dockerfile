@@ -21,6 +21,7 @@ COPY pyproject.toml uv.lock ./
 COPY schemas/ ./schemas/
 COPY packages/ ./packages/
 COPY connectors/ ./connectors/
+COPY policy-library/ ./policy-library/
 
 # Copy all apps to satisfy workspace topology (cli, ingest, etc.)
 # We will use .dockerignore to ensure we don't copy local .venvs
