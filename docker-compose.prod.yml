@@ -14,7 +14,6 @@ services:
   # ============================================================================
   api:
     image: ${DOCKERHUB_USERNAME:-ambyte}/ambyte-api:${TAG:-latest}
-    container_name: ambyte-api
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -43,7 +42,6 @@ services:
   # ============================================================================
   audit-worker:
     image: ${DOCKERHUB_USERNAME:-ambyte}/ambyte-audit-worker:${TAG:-latest}
-    container_name: ambyte-audit-worker
     restart: unless-stopped
     env_file:
       - .env
@@ -67,7 +65,6 @@ services:
   # ============================================================================
   ingest-api:
     image: ${DOCKERHUB_USERNAME:-ambyte}/ambyte-ingest:${TAG:-latest}
-    container_name: ambyte-ingest-api
     restart: unless-stopped
     ports:
       - "8001:8000"
@@ -90,7 +87,6 @@ services:
 
   ingest-worker:
     image: ${DOCKERHUB_USERNAME:-ambyte}/ambyte-ingest:${TAG:-latest}
-    container_name: ambyte-ingest-worker
     restart: unless-stopped
     env_file:
       - .env
@@ -121,7 +117,6 @@ services:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/v1}
         - NEXT_PUBLIC_INGEST_API_URL=${NEXT_PUBLIC_INGEST_API_URL:-http://localhost:8001}
         - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-    container_name: ambyte-web
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -137,7 +132,6 @@ services:
   # ============================================================================
   db:
     image: postgres:15-alpine
-    container_name: ambyte-postgres
     restart: unless-stopped
     env_file:
       - .env
@@ -153,7 +147,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: ambyte-redis
     restart: unless-stopped
     volumes:
       - ambyte_redis_data:/data
@@ -167,7 +160,6 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.12.4
-    container_name: ambyte-qdrant
     restart: unless-stopped
     volumes:
       - ambyte_qdrant_data:/qdrant/storage
@@ -176,7 +168,6 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: ambyte-minio
     restart: unless-stopped
     ports:
       - "9000:9000" # REQUIRED: UI browser directly requests PDFs from localhost:9000

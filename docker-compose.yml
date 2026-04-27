@@ -6,7 +6,6 @@ services:
     build:
       context: .  # Points to repo root
       dockerfile: apps/control_plane_api/Dockerfile
-    container_name: ambyte-api
     restart: always
     ports:
       - "8000:8000"
@@ -36,7 +35,6 @@ services:
     build:
       context: .
       dockerfile: apps/audit-log/Dockerfile
-    container_name: ambyte-audit-worker
     restart: always
     ports:
       - "8002:8002" # Health check port
@@ -64,7 +62,6 @@ services:
       context: . # Points to repo root to capture shared schemas/packages
       dockerfile: apps/ingest_worker/Dockerfile
       no_cache: true
-    container_name: ambyte-ingest-api
     restart: always
     ports:
       - "8001:8000"
@@ -97,7 +94,6 @@ services:
     build:
       context: .
       dockerfile: apps/ingest_worker/Dockerfile
-    container_name: ambyte-ingest-worker
     restart: always
     environment:
       - AMBYTE_INGEST_QDRANT_URL=http://qdrant:6333
@@ -126,7 +122,6 @@ services:
   # ============================================================================
   db:
     image: postgres:15-alpine
-    container_name: ambyte-postgres
     restart: always
     environment:
       - POSTGRES_USER=postgres
@@ -144,7 +139,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: ambyte-redis
     restart: always
     ports:
       - "6379:6379"
@@ -158,7 +152,6 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.12.4
-    container_name: ambyte-qdrant
     restart: always
     ports:
       - "6333:6333"
@@ -170,7 +163,6 @@ services:
   # ============================================================================
   minio:
     image: minio/minio:latest
-    container_name: ambyte-minio
     restart: always
     ports:
       - "9000:9000" # API
@@ -213,7 +205,6 @@ services:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/v1}
         - NEXT_PUBLIC_INGEST_API_URL=${NEXT_PUBLIC_INGEST_API_URL:-http://localhost:8001}
         - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-    container_name: ambyte-web
     restart: always
     ports:
       - "3000:3000"
